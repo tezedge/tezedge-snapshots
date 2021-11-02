@@ -7,14 +7,18 @@ services:
     network_mode: host
     container_name: tezedge-node
     stop_signal: SIGINT
-    command: ["--network", "${TEZOS_NETWORK-florencenet}", "--p2p-port=9732", "--rpc-port=18732", "--websocket-address=0.0.0.0:4927", "--log", "terminal", "file", "--log-file", "/tmp/tezedge/tezedge.log", "--tezos-context-storage", "both", "--context-stats-db-path", "context-stats-db", "--peer-thresh-low", "60", "--peer-thresh-high", "80"]
+    command: ["--network", "${TEZOS_NETWORK-florencenet}", "--p2p-port=9732", "--rpc-port=18732", "--websocket-address=0.0.0.0:4927", "--log", "terminal", "file", "--log-file", "/tmp/tezedge/tezedge.log", "--tezos-context-storage", "irmin", "--context-stats-db-path", "context-stats-db", "--peer-thresh-low", "60", "--peer-thresh-high", "80"]
     volumes:
       - "/satassd/snapshot-test-data/tezedge:/tmp/tezedge"
   
   tezedge-snapshots:
     image: local:tezedge-snapshots
-    command: ["--tezedge-node-url", "http://tezedge-node:18732", "--container-name", "tezedge-node"]
+    network_mode: host
+    command: ["--tezedge-node-url", "http://localhost:18732", "--container-name", "tezedge-node", "--tezedge-database-directory", "/tmp/tezedge/", "--snapshots-target-directory", "/tmp/snapshots"]
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/satassd/snapshot-test-data/tezedge:/tmp/tezedge"
+      - "/satassd/snapshot-test-data/snapshots:/tmp/snapshots"
+
     depends_on:
       - "tezedge-node"

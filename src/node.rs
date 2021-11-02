@@ -71,6 +71,7 @@ pub enum TezedgeNodeError {
     DockerError(#[from] shiplift::Error),
     #[error("Filesystem operation failed: {0}")]
     FilesystemError(#[from] fs_extra::error::Error),
+    // TODO: remove
     #[error("Io error: {0}")]
     IoError(#[from] std::io::Error),
 }
@@ -133,7 +134,7 @@ impl TezedgeNode {
     ) -> Result<(), TezedgeNodeError> {
         self.last_snapshot_timestamp = Some(Instant::now());
         // 1. stop the node container
-        // self.stop().await?;
+        self.stop().await?;
 
         // get the time for the snapshot title
         let now = Utc::now().naive_utc();
@@ -159,6 +160,7 @@ impl TezedgeNode {
             temp_destination.join(Path::new(&format!("{}-{}-{}", "tezedge", date, time)));
 
         if !snapshot_path.exists() {
+            // TODO: do this with fs_extra
             std::fs::create_dir_all(&snapshot_path)?;
         }
 
@@ -173,7 +175,7 @@ impl TezedgeNode {
         let mut to_remove: Vec<PathBuf> = dir::get_dir_content(&snapshot_path)?
             .files
             .iter()
-            .filter(|s| s.ends_with(".log"))
+            .filter(|s| s.contains(".log"))
             .map(|s| snapshot_path.join(s))
             .collect();
 
@@ -195,18 +197,28 @@ impl TezedgeNode {
         fs_extra::remove_items(&[snapshot_path])?;
 
         // 6. start the node container back up
-        // self.start().await?;
+        self.start().await?;
 
         Ok(())
     }
 
-    pub fn can_snapshot(&self) -> bool {
-        if let Some(instant) = self.last_snapshot_timestamp {
-            // TODO: make this optional and part of the configuration
-            // 86400 secs -> 24 hours
-            instant.elapsed() >= Duration::from_secs(10)
-        } else {
-            true
+    pub async fn can_snapshot(&self) -> bool {
+        match self.get_head().await {
+            Ok(_) => {
+                if let Some(instant) = self.last_snapshot_timestamp {
+                    // TODO: make this optional and part of the configuration
+                    // 86400 secs -> 24 hours
+                    instant.elapsed() >= Duration::from_secs(60)
+                } else {
+                    true
+                }
+            },
+            Err(_) => {
+                // if the node does not respond to the rpc, do not snapshot
+                // this catches a corner-case where, the node is started with a cleaned up DB
+                // and is not yet ready for the first snapshot
+                false
+            },
         }
     }
 }

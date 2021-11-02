@@ -42,13 +42,14 @@ async fn main() {
 
     let handle = tokio::spawn(async move {
         while running_thread.load(std::sync::atomic::Ordering::Acquire) {
-            if node.can_snapshot() {
+            if node.can_snapshot().await {
                 if let Err(e) = node.take_snapshot().await {
                     // TODO match errors
                     warn!(log, "{:?}", e);
                 }
             } else {
                 // TODO clean this up + config
+                warn!(log, "Cannot snapshot right now");
                 tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
             }
         }
