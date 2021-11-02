@@ -1,7 +1,11 @@
 // Copyright (c) SimpleStaking, Viable Systems and Tezedge Contributors
 // SPDX-License-Identifier: MIT
 
-use slog::{error, info, Drain, Level, Logger};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
+use slog::{error, info, warn, Drain, Level, Logger};
+use tokio::signal;
 
 pub mod node;
 pub mod configuration;
@@ -26,25 +30,33 @@ async fn main() {
     // create an slog logger
     let log = create_logger(log_level);
 
-    let node = TezedgeNode::new(tezedge_node_url, container_name, tezedge_database_directory);
+    let mut node = TezedgeNode::new(tezedge_node_url, container_name, tezedge_database_directory, snapshots_target_directory);
 
-    //TODO: cycle
-    // match node.get_head() {
-    //     Ok(header) => slog::info!(log, "{:?}", header),
-    //     Err(e) => slog::warn!(log, "Some error: {:?}", e)
-    // }
+    let running = Arc::new(AtomicBool::new(true));
+    let running_thread = running.clone();
 
-    // Test wether we can stop a container from another contianer
-    // node.stop().await.expect("Failed to stop the container");
-    // tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    // node.start().await.expect("Failed to start the contianer");
-    // tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    // node.stop().await.expect("Failed to stop the container");
+    let handle = tokio::spawn(async move {
+        while running_thread.load(std::sync::atomic::Ordering::Acquire) {
+            if node.can_snapshot() {
+                if let Err(e) = node.take_snapshot().await {
+                    // TODO match errors
+                    warn!(log, "{:?}", e);
+                }
+            } else {
+                // TODO clean this up + config
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+            }
+        }
+    });
 
-    match node.take_snapshot().await {
-        Ok(()) => info!(log, "OK"),
-        Err(e) => error!(log, "Error: {:?}", e)
-    }
+    // wait for SIGINT
+    signal::ctrl_c()
+        .await
+        .expect("Failed to listen for ctrl-c event");
+    // info!(log, "Ctrl-c or SIGINT received!");
+
+    // set running to false
+    running.store(false, Ordering::Release);
 
 }
 

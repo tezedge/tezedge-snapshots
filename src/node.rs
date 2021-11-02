@@ -5,10 +5,11 @@ use url::{Url, ParseError};
 use serde::Deserialize;
 use thiserror::Error;
 use shiplift::Docker;
-use std::{path::{Path, PathBuf}, time::Duration, vec};
+use std::{fmt::format, path::{Path, PathBuf}, vec};
 use fs_extra::dir;
 use chrono::Utc;
 use chrono::Timelike;
+use tokio::time::{Instant, Duration};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TezosBlockHeader {
@@ -34,6 +35,8 @@ pub struct TezedgeNode {
     url: Url,
     container_name: String,
     database_directory: PathBuf,
+    last_snapshot_timestamp: Option<Instant>,
+    snapshots_target_directory: PathBuf,
 }
 
 // pub struct TezedgeSnapshotter {
@@ -64,14 +67,18 @@ pub enum TezedgeNodeError {
     DockerError(#[from] shiplift::Error),
     #[error("Filesystem operation failed: {0}")]
     FilesystemError(#[from] fs_extra::error::Error),
+    #[error("Io error: {0}")]
+    IoError(#[from] std::io::Error)
 }
 
 impl TezedgeNode {
-    pub fn new(url: Url, container_name: String, database_directory: PathBuf) -> Self {
+    pub fn new(url: Url, container_name: String, database_directory: PathBuf, snapshots_target_directory: PathBuf) -> Self {
         Self {
             url,
             container_name,
             database_directory,
+            snapshots_target_directory,
+            last_snapshot_timestamp: None,
         }
     }
 
@@ -104,8 +111,9 @@ impl TezedgeNode {
     }
 
     /// Takes a snapshot of the tezedge node
-    pub async fn take_snapshot(&self, /*snapshot_block_header: TezosBlockHeader*/) -> Result<(), TezedgeNodeError> {
+    pub async fn take_snapshot(&mut self, /*snapshot_block_header: TezosBlockHeader*/) -> Result<(), TezedgeNodeError> {
 
+        self.last_snapshot_timestamp = Some(Instant::now());
         // 1. stop the node container
         // self.stop().await?;
 
@@ -117,24 +125,56 @@ impl TezedgeNode {
 
         println!("date: {} time: {}", date, time);
         // 2. copy out the database directories to a temp folder
-        // let copy_options = dir::CopyOptions::new();
-        // let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
+        let copy_options = dir::CopyOptions {
+            content_only: true,
+            ..Default::default()
+        };
 
-        // dir::copy(&self.database_directory, temp_destination, &copy_options)?;
 
-        // // 3. remove identity, log files and lock files
-        // let to_remove = vec![temp_destination.join("identity.json"), temp_destination.join("*.log"), temp_destination.join("context/index/lock")];
-        // fs_extra::remove_items(&to_remove)?;
+        let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
+        let snapshot_path = temp_destination.join(Path::new(&format!("{}-{}-{}", "tezedge", date, time)));
 
-        // // 4. zip/tar it?
-        // // TODO
+        if !snapshot_path.exists() {
+            std::fs::create_dir_all(&snapshot_path)?;
+        }
 
-        // // 5. move to the destination
-        // dir::move_dir(temp_destination, &self.snapshots_target_directory, &copy_options)?;
+        let to_remove = vec![self.database_directory.join("context/index/lock")];
+        fs_extra::remove_items(&to_remove)?;
 
-        // // 6. start the node container back up
+        dir::copy(&self.database_directory, &snapshot_path, &copy_options)?;
+
+        // 3. remove identity, log files and lock files
+
+        // collect all log files present in the snapshot
+        let mut to_remove: Vec<PathBuf> = dir::get_dir_content(&snapshot_path)?.files.iter().filter(|s| s.ends_with(".log")).map(|s| snapshot_path.join(s)).collect();
+
+
+        to_remove.push(snapshot_path.join("identity.json"));
+        fs_extra::remove_items(&to_remove)?;
+
+        // 4. zip/tar it?
+        // TODO
+
+        // 5. move to the destination
+        let copy_options = dir::CopyOptions::new();
+        dir::move_dir(snapshot_path.clone(), &self.snapshots_target_directory, &copy_options)?;
+
+        // remove the tmp folder
+        fs_extra::remove_items(&[snapshot_path])?;
+
+        // 6. start the node container back up
         // self.start().await?;
 
         Ok(())
+    }
+
+    pub fn can_snapshot(&self) -> bool {
+        if let Some(instant) = self.last_snapshot_timestamp {
+            // TODO: make this optional and part of the configuration
+            // 86400 secs -> 24 hours
+            instant.elapsed() >= Duration::from_secs(10)
+        } else {
+            true
+        }
     }
 }
