@@ -18,12 +18,15 @@ async fn main() {
         tezedge_node_url,
         head_check_interval,
         container_name,
+        tezedge_database_directory,
+        snapshots_target_directory,
+        snapshot_capacity,
     } = env;
 
     // create an slog logger
     let log = create_logger(log_level);
 
-    let node = TezedgeNode::new(tezedge_node_url, container_name);
+    let node = TezedgeNode::new(tezedge_node_url, container_name, tezedge_database_directory);
 
     //TODO: cycle
     // match node.get_head() {
@@ -32,11 +35,16 @@ async fn main() {
     // }
 
     // Test wether we can stop a container from another contianer
-    node.stop().await.expect("Failed to stop the container");
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    node.start().await.expect("Failed to start the contianer");
-    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-    node.stop().await.expect("Failed to stop the container");
+    // node.stop().await.expect("Failed to stop the container");
+    // tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    // node.start().await.expect("Failed to start the contianer");
+    // tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+    // node.stop().await.expect("Failed to stop the container");
+
+    match node.take_snapshot().await {
+        Ok(()) => info!(log, "OK"),
+        Err(e) => error!(log, "Error: {:?}", e)
+    }
 
 }
 
