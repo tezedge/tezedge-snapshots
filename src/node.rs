@@ -1,15 +1,19 @@
 // Copyright (c) SimpleStaking, Viable Systems and Tezedge Contributors
 // SPDX-License-Identifier: MIT
 
-use url::{Url, ParseError};
-use serde::Deserialize;
-use thiserror::Error;
-use shiplift::Docker;
-use std::{fmt::format, path::{Path, PathBuf}, vec};
-use fs_extra::dir;
-use chrono::Utc;
 use chrono::Timelike;
-use tokio::time::{Instant, Duration};
+use chrono::Utc;
+use fs_extra::dir;
+use serde::Deserialize;
+use shiplift::Docker;
+use std::{
+    fmt::format,
+    path::{Path, PathBuf},
+    vec,
+};
+use thiserror::Error;
+use tokio::time::{Duration, Instant};
+use url::{ParseError, Url};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TezosBlockHeader {
@@ -19,7 +23,7 @@ pub struct TezosBlockHeader {
     level: i32,
     proto: i32, // TODO: verify
     predecessor: String,
-    timestamp: String, // TODO: rc-3999 format? Verify
+    timestamp: String,   // TODO: rc-3999 format? Verify
     validation_pass: u8, // TODO: verify
     operations_hash: String,
     fitness: Vec<String>,
@@ -48,7 +52,7 @@ pub struct TezedgeNode {
 
 // pub struct Snapshot {
 //     network: String,
-//     timestamp: 
+//     timestamp:
 // }
 
 // impl TezedgeSnapshotter {
@@ -68,11 +72,16 @@ pub enum TezedgeNodeError {
     #[error("Filesystem operation failed: {0}")]
     FilesystemError(#[from] fs_extra::error::Error),
     #[error("Io error: {0}")]
-    IoError(#[from] std::io::Error)
+    IoError(#[from] std::io::Error),
 }
 
 impl TezedgeNode {
-    pub fn new(url: Url, container_name: String, database_directory: PathBuf, snapshots_target_directory: PathBuf) -> Self {
+    pub fn new(
+        url: Url,
+        container_name: String,
+        database_directory: PathBuf,
+        snapshots_target_directory: PathBuf,
+    ) -> Self {
         Self {
             url,
             container_name,
@@ -94,7 +103,11 @@ impl TezedgeNode {
     pub async fn stop(&self) -> Result<(), TezedgeNodeError> {
         let docker = Docker::new();
 
-        docker.containers().get(&self.container_name).stop(Some(Duration::from_secs(10))).await?;
+        docker
+            .containers()
+            .get(&self.container_name)
+            .stop(Some(Duration::from_secs(10)))
+            .await?;
 
         Ok(())
     }
@@ -103,7 +116,11 @@ impl TezedgeNode {
     pub async fn start(&self) -> Result<(), TezedgeNodeError> {
         let docker = Docker::new();
 
-        docker.containers().get(&self.container_name).start().await?;
+        docker
+            .containers()
+            .get(&self.container_name)
+            .start()
+            .await?;
 
         // TODO: preform a health check with get_head
 
@@ -111,8 +128,9 @@ impl TezedgeNode {
     }
 
     /// Takes a snapshot of the tezedge node
-    pub async fn take_snapshot(&mut self, /*snapshot_block_header: TezosBlockHeader*/) -> Result<(), TezedgeNodeError> {
-
+    pub async fn take_snapshot(
+        &mut self, /*snapshot_block_header: TezosBlockHeader*/
+    ) -> Result<(), TezedgeNodeError> {
         self.last_snapshot_timestamp = Some(Instant::now());
         // 1. stop the node container
         // self.stop().await?;
@@ -121,7 +139,13 @@ impl TezedgeNode {
         let now = Utc::now().naive_utc();
         println!("Naive utc: {}", now.to_string());
         let date = now.date().to_string().replace('-', "");
-        let time: String = now.time().to_string().replace(':', "").split('.').take(1).collect();
+        let time: String = now
+            .time()
+            .to_string()
+            .replace(':', "")
+            .split('.')
+            .take(1)
+            .collect();
 
         println!("date: {} time: {}", date, time);
         // 2. copy out the database directories to a temp folder
@@ -130,9 +154,9 @@ impl TezedgeNode {
             ..Default::default()
         };
 
-
         let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
-        let snapshot_path = temp_destination.join(Path::new(&format!("{}-{}-{}", "tezedge", date, time)));
+        let snapshot_path =
+            temp_destination.join(Path::new(&format!("{}-{}-{}", "tezedge", date, time)));
 
         if !snapshot_path.exists() {
             std::fs::create_dir_all(&snapshot_path)?;
@@ -146,8 +170,12 @@ impl TezedgeNode {
         // 3. remove identity, log files and lock files
 
         // collect all log files present in the snapshot
-        let mut to_remove: Vec<PathBuf> = dir::get_dir_content(&snapshot_path)?.files.iter().filter(|s| s.ends_with(".log")).map(|s| snapshot_path.join(s)).collect();
-
+        let mut to_remove: Vec<PathBuf> = dir::get_dir_content(&snapshot_path)?
+            .files
+            .iter()
+            .filter(|s| s.ends_with(".log"))
+            .map(|s| snapshot_path.join(s))
+            .collect();
 
         to_remove.push(snapshot_path.join("identity.json"));
         fs_extra::remove_items(&to_remove)?;
@@ -157,7 +185,11 @@ impl TezedgeNode {
 
         // 5. move to the destination
         let copy_options = dir::CopyOptions::new();
-        dir::move_dir(snapshot_path.clone(), &self.snapshots_target_directory, &copy_options)?;
+        dir::move_dir(
+            snapshot_path.clone(),
+            &self.snapshots_target_directory,
+            &copy_options,
+        )?;
 
         // remove the tmp folder
         fs_extra::remove_items(&[snapshot_path])?;

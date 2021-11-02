@@ -1,14 +1,14 @@
 // Copyright (c) SimpleStaking, Viable Systems and Tezedge Contributors
 // SPDX-License-Identifier: MIT
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use slog::{error, info, warn, Drain, Level, Logger};
 use tokio::signal;
 
-pub mod node;
 pub mod configuration;
+pub mod node;
 
 use crate::configuration::TezedgeSnapshotEnvironment;
 use crate::node::TezedgeNode;
@@ -30,7 +30,12 @@ async fn main() {
     // create an slog logger
     let log = create_logger(log_level);
 
-    let mut node = TezedgeNode::new(tezedge_node_url, container_name, tezedge_database_directory, snapshots_target_directory);
+    let mut node = TezedgeNode::new(
+        tezedge_node_url,
+        container_name,
+        tezedge_database_directory,
+        snapshots_target_directory,
+    );
 
     let running = Arc::new(AtomicBool::new(true));
     let running_thread = running.clone();
@@ -57,7 +62,6 @@ async fn main() {
 
     // set running to false
     running.store(false, Ordering::Release);
-
 }
 
 /// Creates a slog Logger

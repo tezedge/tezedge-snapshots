@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{App, Arg};
-use std::{env, path::{Path, PathBuf}};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use url::Url;
 
@@ -28,7 +31,6 @@ pub struct TezedgeSnapshotEnvironment {
 
     // maximum number of snapshots kept on the machine
     pub snapshot_capacity: u64,
-
     // TODO: add options for snapshot frequency in blocks
     // TODO: add options for snapshot frequency: daily, weekly, ... Note: in combination of timestamp?
     // TODO: add options for concrete levels to snapshot on
@@ -148,7 +150,7 @@ impl TezedgeSnapshotEnvironment {
                 .value_of("snapshot-capacity")
                 .unwrap_or("10")
                 .parse::<u64>()
-                .expect("Expected u64 value")
+                .expect("Expected u64 value"),
         }
     }
 }
