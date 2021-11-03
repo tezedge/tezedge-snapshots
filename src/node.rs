@@ -1,22 +1,19 @@
 // Copyright (c) SimpleStaking, Viable Systems and Tezedge Contributors
 // SPDX-License-Identifier: MIT
 
-use chrono::Timelike;
 use chrono::Utc;
+use filetime::FileTime;
 use fs_extra::dir;
 use serde::Deserialize;
 use shiplift::Docker;
-use std::collections::HashMap;
 use std::{
-    fmt::format,
+    fs,
     path::{Path, PathBuf},
     vec,
-    fs,
 };
 use thiserror::Error;
 use tokio::time::{Duration, Instant};
 use url::{ParseError, Url};
-use filetime::FileTime;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TezosBlockHeader {
@@ -46,22 +43,6 @@ pub struct TezedgeNode {
     snapshots_target_directory: PathBuf,
 }
 
-// pub struct TezedgeSnapshotter {
-//     snapshots_target_directory: PathBuf,
-//     snapshot_capacity: u64,
-
-//     snapshots: Vec<>,
-// }
-
-// pub struct Snapshot {
-//     network: String,
-//     timestamp:
-// }
-
-// impl TezedgeSnapshotter {
-//     pub fn load_snapshots
-// }
-
 #[derive(Debug, Error)]
 pub enum TezedgeNodeError {
     #[error("The defined tezedge node is unreachable")]
@@ -74,7 +55,6 @@ pub enum TezedgeNodeError {
     DockerError(#[from] shiplift::Error),
     #[error("Filesystem operation failed: {0}")]
     FilesystemError(#[from] fs_extra::error::Error),
-    // TODO: remove
     #[error("Io error: {0}")]
     IoError(#[from] std::io::Error),
 }
@@ -133,7 +113,8 @@ impl TezedgeNode {
 
     /// Takes a snapshot of the tezedge node
     pub async fn take_snapshot(
-        &mut self, /*snapshot_block_header: TezosBlockHeader*/
+        &mut self,
+        snapshot_capacity: usize,
     ) -> Result<(), TezedgeNodeError> {
         self.last_snapshot_timestamp = Some(Instant::now());
         // 1. stop the node container
@@ -161,8 +142,7 @@ impl TezedgeNode {
             temp_destination.join(Path::new(&format!("{}-{}-{}", "tezedge", date, time)));
 
         if !snapshot_path.exists() {
-            // TODO: do this with fs_extra
-            std::fs::create_dir_all(&snapshot_path)?;
+            dir::create_all(&snapshot_path, false)?;
         }
 
         let to_remove = vec![self.database_directory.join("context/index/lock")];
@@ -183,18 +163,18 @@ impl TezedgeNode {
         to_remove.push(snapshot_path.join("identity.json"));
         fs_extra::remove_items(&to_remove)?;
 
-        // 4. zip/tar it?
-        // TODO
-
         // identify and remove the oldest snapshot in the target dir, if we are over capacity
         let current_snapshots = dir::get_dir_content(&self.snapshots_target_directory)?
             .directories
             .iter()
             .map(|dir| self.snapshots_target_directory.join(dir))
-            // we need the only the direct directories contained in the main directory, filter out all deeper sub directories 
-            .filter(|p| p.components().count() == self.snapshots_target_directory.components().count() + 1) 
+            // we need the only the direct directories contained in the main directory, filter out all deeper sub directories
+            .filter(|p| {
+                p.components().count() == self.snapshots_target_directory.components().count() + 1
+            })
             .collect::<Vec<PathBuf>>();
 
+        // collect all last_modified times
         let mut dir_times: Vec<(PathBuf, FileTime)> = vec![];
         for snapshot_path in current_snapshots {
             let meta = fs::metadata(&snapshot_path)?;
@@ -203,15 +183,10 @@ impl TezedgeNode {
         }
 
         // sort by times
-        dir_times.sort_by(|a, b| {
-            a.1.cmp(&b.1)
-        });
-
-        println!("{:?}", dir_times);
+        dir_times.sort_by(|a, b| a.1.cmp(&b.1));
 
         // remove the oldest file if over capacity
-        // TODO: capacity from config
-        if dir_times.len() >= 7 {
+        if dir_times.len() >= snapshot_capacity {
             fs_extra::remove_items(&[dir_times[0].0.clone()])?;
         }
 
@@ -232,31 +207,21 @@ impl TezedgeNode {
         Ok(())
     }
 
-    pub async fn can_snapshot(&self) -> bool {
+    pub async fn can_snapshot(&self, snapshot_frequency: u64) -> bool {
         match self.get_head().await {
             Ok(_) => {
                 if let Some(instant) = self.last_snapshot_timestamp {
-                    // TODO: make this optional and part of the configuration
-                    // 86400 secs -> 24 hours
-                    instant.elapsed() >= Duration::from_secs(30)
+                    instant.elapsed() >= Duration::from_secs(snapshot_frequency)
                 } else {
                     true
                 }
-            },
+            }
             Err(_) => {
                 // if the node does not respond to the rpc, do not snapshot
                 // this catches a corner-case where, the node is started with a cleaned up DB
                 // and is not yet ready for the first snapshot
                 false
-            },
+            }
         }
-        // TODO: debug, remove
-        // if let Some(instant) = self.last_snapshot_timestamp {
-        //     // TODO: make this optional and part of the configuration
-        //     // 86400 secs -> 24 hours
-        //     instant.elapsed() >= Duration::from_secs(5)
-        // } else {
-        //     true
-        // }
     }
 }

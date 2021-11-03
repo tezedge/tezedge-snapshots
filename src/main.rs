@@ -5,13 +5,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use slog::{error, info, warn, Drain, Level, Logger};
-use tokio::signal;
+use tokio::{signal, time};
 
 pub mod configuration;
 pub mod node;
 
 use crate::configuration::TezedgeSnapshotEnvironment;
-use crate::node::TezedgeNode;
+use crate::node::{TezedgeNode, TezedgeNodeError};
 
 #[tokio::main]
 async fn main() {
@@ -20,11 +20,12 @@ async fn main() {
     let TezedgeSnapshotEnvironment {
         log_level,
         tezedge_node_url,
-        head_check_interval,
+        check_interval,
         container_name,
         tezedge_database_directory,
         snapshots_target_directory,
         snapshot_capacity,
+        snapshot_frequency,
     } = env;
 
     // create an slog logger
@@ -38,19 +39,23 @@ async fn main() {
     );
 
     let running = Arc::new(AtomicBool::new(true));
-    let running_thread = running.clone();
 
+    let running_thread = running.clone();
+    let thread_log = log.clone();
     let handle = tokio::spawn(async move {
         while running_thread.load(std::sync::atomic::Ordering::Acquire) {
-            if node.can_snapshot().await {
-                if let Err(e) = node.take_snapshot().await {
-                    // TODO match errors
-                    warn!(log, "{:?}", e);
+            if node.can_snapshot(snapshot_frequency).await {
+                if let Err(e) = node.take_snapshot(snapshot_capacity).await {
+                    match e {
+                        TezedgeNodeError::NodeUnreachable => warn!(thread_log, "{:?}", e),
+                        _ => {
+                            error!(thread_log, "{:?}", e);
+                            break;
+                        }
+                    }
                 }
             } else {
-                // TODO clean this up + config
-                warn!(log, "Cannot snapshot right now");
-                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                time::sleep(time::Duration::from_secs(check_interval)).await;
             }
         }
     });
@@ -59,10 +64,12 @@ async fn main() {
     signal::ctrl_c()
         .await
         .expect("Failed to listen for ctrl-c event");
-    // info!(log, "Ctrl-c or SIGINT received!");
+    info!(log, "Ctrl-c or SIGINT received!");
 
     // set running to false
     running.store(false, Ordering::Release);
+
+    drop(handle);
 }
 
 /// Creates a slog Logger

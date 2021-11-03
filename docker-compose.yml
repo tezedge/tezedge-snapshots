@@ -14,6 +14,7 @@ services:
   tezedge-snapshots:
     image: local:tezedge-snapshots
     network_mode: host
+    stop_signal: SIGINT
     command: ["--tezedge-node-url", "http://localhost:18732", "--container-name", "tezedge-node", "--tezedge-database-directory", "/tmp/tezedge/", "--snapshots-target-directory", "/tmp/snapshots"]
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
