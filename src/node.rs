@@ -6,6 +6,7 @@ use filetime::FileTime;
 use fs_extra::dir;
 use serde::Deserialize;
 use shiplift::Docker;
+use slog::{info, Logger};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -35,16 +36,17 @@ pub struct TezosBlockHeader {
     // introduced in newer protocols
     liquidity_baking_escape_vote: Option<bool>,
 }
-pub struct TezedgeNode {
+pub struct TezedgeNodeController {
     url: Url,
     container_name: String,
     database_directory: PathBuf,
     last_snapshot_timestamp: Option<Instant>,
     snapshots_target_directory: PathBuf,
+    log: Logger,
 }
 
 #[derive(Debug, Error)]
-pub enum TezedgeNodeError {
+pub enum TezedgeNodeControllerError {
     #[error("The defined tezedge node is unreachable")]
     NodeUnreachable,
     #[error("Failed to parse url: {0}")]
@@ -59,12 +61,13 @@ pub enum TezedgeNodeError {
     IoError(#[from] std::io::Error),
 }
 
-impl TezedgeNode {
+impl TezedgeNodeController {
     pub fn new(
         url: Url,
         container_name: String,
         database_directory: PathBuf,
         snapshots_target_directory: PathBuf,
+        log: Logger,
     ) -> Self {
         Self {
             url,
@@ -72,11 +75,12 @@ impl TezedgeNode {
             database_directory,
             snapshots_target_directory,
             last_snapshot_timestamp: None,
+            log,
         }
     }
 
     /// Gets the head header from the node
-    pub async fn get_head(&self) -> Result<TezosBlockHeader, TezedgeNodeError> {
+    pub async fn get_head(&self) -> Result<TezosBlockHeader, TezedgeNodeControllerError> {
         let header_url = self.url.join("chains/main/blocks/head/header")?;
         let head_header = reqwest::get(header_url).await?.json().await?;
 
@@ -84,7 +88,7 @@ impl TezedgeNode {
     }
 
     /// Stops the tezedge container
-    pub async fn stop(&self) -> Result<(), TezedgeNodeError> {
+    pub async fn stop(&self) -> Result<(), TezedgeNodeControllerError> {
         let docker = Docker::new();
 
         docker
@@ -93,11 +97,12 @@ impl TezedgeNode {
             .stop(Some(Duration::from_secs(10)))
             .await?;
 
+        info!(self.log, "Tezedge node container stopped");
         Ok(())
     }
 
     /// Starts the tezedge container
-    pub async fn start(&self) -> Result<(), TezedgeNodeError> {
+    pub async fn start(&self) -> Result<(), TezedgeNodeControllerError> {
         let docker = Docker::new();
 
         docker
@@ -107,6 +112,7 @@ impl TezedgeNode {
             .await?;
 
         // TODO: preform a health check with get_head
+        info!(self.log, "Tezedge node container started");
 
         Ok(())
     }
@@ -115,9 +121,12 @@ impl TezedgeNode {
     pub async fn take_snapshot(
         &mut self,
         snapshot_capacity: usize,
-    ) -> Result<(), TezedgeNodeError> {
+    ) -> Result<(), TezedgeNodeControllerError> {
         self.last_snapshot_timestamp = Some(Instant::now());
+        let head_level = self.get_head().await?.level;
+
         // 1. stop the node container
+        info!(self.log, "Stopping tezedge container (1/6)");
         self.stop().await?;
 
         // get the time for the snapshot title
@@ -132,6 +141,8 @@ impl TezedgeNode {
             .collect();
 
         // 2. copy out the database directories to a temp folder
+        info!(self.log, "Extracting node databases (2/6)");
+
         let copy_options = dir::CopyOptions {
             content_only: true,
             ..Default::default()
@@ -139,7 +150,7 @@ impl TezedgeNode {
 
         let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
         let snapshot_path =
-            temp_destination.join(Path::new(&format!("{}-{}-{}", "tezedge", date, time)));
+            temp_destination.join(Path::new(&format!("{}-{}-{}-{}", "tezedge", date, time, head_level)));
 
         if !snapshot_path.exists() {
             dir::create_all(&snapshot_path, false)?;
@@ -150,7 +161,8 @@ impl TezedgeNode {
 
         dir::copy(&self.database_directory, &snapshot_path, &copy_options)?;
 
-        // 3. remove identity, log files and lock files
+        // 3. remove identity and log files
+        info!(self.log, "Removing unnecessary files (log, identity) (3/6)");
 
         // collect all log files present in the snapshot
         let mut to_remove: Vec<PathBuf> = dir::get_dir_content(&snapshot_path)?
@@ -162,6 +174,8 @@ impl TezedgeNode {
 
         to_remove.push(snapshot_path.join("identity.json"));
         fs_extra::remove_items(&to_remove)?;
+
+        info!(self.log, "Checking for rolling (4/6)");
 
         // identify and remove the oldest snapshot in the target dir, if we are over capacity
         let current_snapshots = dir::get_dir_content(&self.snapshots_target_directory)?
@@ -187,10 +201,12 @@ impl TezedgeNode {
 
         // remove the oldest file if over capacity
         if dir_times.len() >= snapshot_capacity {
+            info!(self.log, "Rolling snapshots - Removing oldest snapshot");
             fs_extra::remove_items(&[dir_times[0].0.clone()])?;
         }
 
         // 5. move to the destination
+        info!(self.log, "Moving snapshot to the target directory (5/6)");
         let copy_options = dir::CopyOptions::new();
         dir::move_dir(
             snapshot_path.clone(),
@@ -202,6 +218,7 @@ impl TezedgeNode {
         fs_extra::remove_items(&[snapshot_path])?;
 
         // 6. start the node container back up
+        info!(self.log, "Starting back up the tezedge container (6/6)");
         self.start().await?;
 
         Ok(())

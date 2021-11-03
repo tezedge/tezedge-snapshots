@@ -11,7 +11,7 @@ pub mod configuration;
 pub mod node;
 
 use crate::configuration::TezedgeSnapshotEnvironment;
-use crate::node::{TezedgeNode, TezedgeNodeError};
+use crate::node::{TezedgeNodeController, TezedgeNodeControllerError};
 
 #[tokio::main]
 async fn main() {
@@ -31,11 +31,12 @@ async fn main() {
     // create an slog logger
     let log = create_logger(log_level);
 
-    let mut node = TezedgeNode::new(
+    let mut node = TezedgeNodeController::new(
         tezedge_node_url,
         container_name,
         tezedge_database_directory,
         snapshots_target_directory,
+        log.clone(),
     );
 
     let running = Arc::new(AtomicBool::new(true));
@@ -45,9 +46,10 @@ async fn main() {
     let handle = tokio::spawn(async move {
         while running_thread.load(std::sync::atomic::Ordering::Acquire) {
             if node.can_snapshot(snapshot_frequency).await {
+                info!(thread_log, "Taking new snapshot");
                 if let Err(e) = node.take_snapshot(snapshot_capacity).await {
                     match e {
-                        TezedgeNodeError::NodeUnreachable => warn!(thread_log, "{:?}", e),
+                        TezedgeNodeControllerError::NodeUnreachable => warn!(thread_log, "{:?}", e),
                         _ => {
                             error!(thread_log, "{:?}", e);
                             break;
