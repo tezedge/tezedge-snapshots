@@ -6,14 +6,17 @@ use chrono::Utc;
 use fs_extra::dir;
 use serde::Deserialize;
 use shiplift::Docker;
+use std::collections::HashMap;
 use std::{
     fmt::format,
     path::{Path, PathBuf},
     vec,
+    fs,
 };
 use thiserror::Error;
 use tokio::time::{Duration, Instant};
 use url::{ParseError, Url};
+use filetime::FileTime;
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TezosBlockHeader {
@@ -138,7 +141,6 @@ impl TezedgeNode {
 
         // get the time for the snapshot title
         let now = Utc::now().naive_utc();
-        println!("Naive utc: {}", now.to_string());
         let date = now.date().to_string().replace('-', "");
         let time: String = now
             .time()
@@ -148,7 +150,6 @@ impl TezedgeNode {
             .take(1)
             .collect();
 
-        println!("date: {} time: {}", date, time);
         // 2. copy out the database directories to a temp folder
         let copy_options = dir::CopyOptions {
             content_only: true,
@@ -185,6 +186,35 @@ impl TezedgeNode {
         // 4. zip/tar it?
         // TODO
 
+        // identify and remove the oldest snapshot in the target dir, if we are over capacity
+        let current_snapshots = dir::get_dir_content(&self.snapshots_target_directory)?
+            .directories
+            .iter()
+            .map(|dir| self.snapshots_target_directory.join(dir))
+            // we need the only the direct directories contained in the main directory, filter out all deeper sub directories 
+            .filter(|p| p.components().count() == self.snapshots_target_directory.components().count() + 1) 
+            .collect::<Vec<PathBuf>>();
+
+        let mut dir_times: Vec<(PathBuf, FileTime)> = vec![];
+        for snapshot_path in current_snapshots {
+            let meta = fs::metadata(&snapshot_path)?;
+            let last_modified = FileTime::from_last_modification_time(&meta);
+            dir_times.push((snapshot_path, last_modified));
+        }
+
+        // sort by times
+        dir_times.sort_by(|a, b| {
+            a.1.cmp(&b.1)
+        });
+
+        println!("{:?}", dir_times);
+
+        // remove the oldest file if over capacity
+        // TODO: capacity from config
+        if dir_times.len() >= 7 {
+            fs_extra::remove_items(&[dir_times[0].0.clone()])?;
+        }
+
         // 5. move to the destination
         let copy_options = dir::CopyOptions::new();
         dir::move_dir(
@@ -208,7 +238,7 @@ impl TezedgeNode {
                 if let Some(instant) = self.last_snapshot_timestamp {
                     // TODO: make this optional and part of the configuration
                     // 86400 secs -> 24 hours
-                    instant.elapsed() >= Duration::from_secs(60)
+                    instant.elapsed() >= Duration::from_secs(30)
                 } else {
                     true
                 }
@@ -220,5 +250,13 @@ impl TezedgeNode {
                 false
             },
         }
+        // TODO: debug, remove
+        // if let Some(instant) = self.last_snapshot_timestamp {
+        //     // TODO: make this optional and part of the configuration
+        //     // 86400 secs -> 24 hours
+        //     instant.elapsed() >= Duration::from_secs(5)
+        // } else {
+        //     true
+        // }
     }
 }
