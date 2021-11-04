@@ -40,6 +40,7 @@ pub struct TezedgeNodeController {
     url: Url,
     node_container_name: String,
     monitoring_container_name: String,
+    network: String,
     database_directory: PathBuf,
     last_snapshot_timestamp: Option<Instant>,
     snapshots_target_directory: PathBuf,
@@ -67,6 +68,7 @@ impl TezedgeNodeController {
         url: Url,
         node_container_name: String,
         monitoring_container_name: String,
+        network: String,
         database_directory: PathBuf,
         snapshots_target_directory: PathBuf,
         log: Logger,
@@ -75,6 +77,7 @@ impl TezedgeNodeController {
             url,
             node_container_name,
             monitoring_container_name,
+            network,
             database_directory,
             snapshots_target_directory,
             last_snapshot_timestamp: None,
@@ -169,7 +172,7 @@ impl TezedgeNodeController {
 
         let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
         let snapshot_path =
-            temp_destination.join(Path::new(&format!("{}-{}-{}-{}", "tezedge", date, time, head_level)));
+            temp_destination.join(Path::new(&format!("{}-{}-{}-{}-{}", "tezedge", self.network, date, time, head_level)));
 
         if !snapshot_path.exists() {
             dir::create_all(&snapshot_path, false)?;

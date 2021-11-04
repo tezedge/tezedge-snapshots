@@ -37,6 +37,10 @@ pub struct TezedgeSnapshotEnvironment {
 
     // frequency of the snapshots in seconds
     pub snapshot_frequency: u64,
+
+    // network tezedge is connecting to
+    pub network: String,
+
     // TODO: add options for snapshot frequency in blocks
     // TODO: add options for snapshot frequency: daily, weekly, ... Note: in combination of timestamp?
     // TODO: add options for concrete levels to snapshot on
@@ -83,11 +87,18 @@ fn tezedge_snapshots_app() -> App<'static, 'static> {
                 .help("The name of the container the tezedge node resides in"),
         )
         .arg(
+            Arg::with_name("network")
+                .long("network")
+                .takes_value(true)
+                .value_name("STRING")
+                .help("The name of network tezedge is connecting to"),
+        )
+        .arg(
             Arg::with_name("monitoring-container-name")
                 .long("monitoring-container-name")
                 .takes_value(true)
                 .value_name("STRING")
-                .help("The name of the container the tezedge node resides in"),
+                .help("The name of the container the tezedge monitoring resides in"),
         )
         .arg(
             Arg::with_name("tezedge-node-url")
@@ -159,6 +170,10 @@ impl TezedgeSnapshotEnvironment {
             monitoring_container_name: args
                 .value_of("monitoring-container-name")
                 .unwrap_or("tezedge-node-monitoring")
+                .to_string(),
+            network: args
+                .value_of("network")
+                .unwrap_or("network")
                 .to_string(),
             snapshots_target_directory: args
                 .value_of("snapshots-target-directory")
