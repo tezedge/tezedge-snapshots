@@ -38,7 +38,8 @@ pub struct TezosBlockHeader {
 }
 pub struct TezedgeNodeController {
     url: Url,
-    container_name: String,
+    node_container_name: String,
+    monitoring_container_name: String,
     database_directory: PathBuf,
     last_snapshot_timestamp: Option<Instant>,
     snapshots_target_directory: PathBuf,
@@ -64,14 +65,16 @@ pub enum TezedgeNodeControllerError {
 impl TezedgeNodeController {
     pub fn new(
         url: Url,
-        container_name: String,
+        node_container_name: String,
+        monitoring_container_name: String,
         database_directory: PathBuf,
         snapshots_target_directory: PathBuf,
         log: Logger,
     ) -> Self {
         Self {
             url,
-            container_name,
+            node_container_name,
+            monitoring_container_name,
             database_directory,
             snapshots_target_directory,
             last_snapshot_timestamp: None,
@@ -93,11 +96,19 @@ impl TezedgeNodeController {
 
         docker
             .containers()
-            .get(&self.container_name)
+            .get(&self.node_container_name)
             .stop(Some(Duration::from_secs(10)))
             .await?;
 
         info!(self.log, "Tezedge node container stopped");
+
+        docker
+            .containers()
+            .get(&self.monitoring_container_name)
+            .stop(Some(Duration::from_secs(10)))
+            .await?;
+        info!(self.log, "Tezedge node monitoring container stopped");
+        
         Ok(())
     }
 
@@ -107,12 +118,20 @@ impl TezedgeNodeController {
 
         docker
             .containers()
-            .get(&self.container_name)
+            .get(&self.node_container_name)
             .start()
             .await?;
 
-        // TODO: preform a health check with get_head
         info!(self.log, "Tezedge node container started");
+
+        docker
+            .containers()
+            .get(&self.monitoring_container_name)
+            .start()
+            .await?;
+
+        info!(self.log, "Tezedge node monitoring container started");
+        // TODO: preform a health check with get_head
 
         Ok(())
     }

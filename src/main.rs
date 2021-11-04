@@ -21,7 +21,8 @@ async fn main() {
         log_level,
         tezedge_node_url,
         check_interval,
-        container_name,
+        node_container_name,
+        monitoring_container_name,
         tezedge_database_directory,
         snapshots_target_directory,
         snapshot_capacity,
@@ -33,7 +34,8 @@ async fn main() {
 
     let mut node = TezedgeNodeController::new(
         tezedge_node_url,
-        container_name,
+        node_container_name,
+        monitoring_container_name,
         tezedge_database_directory,
         snapshots_target_directory,
         log.clone(),

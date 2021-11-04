@@ -21,7 +21,10 @@ pub struct TezedgeSnapshotEnvironment {
     pub tezedge_node_url: Url,
 
     // name of the container the tezedge node resides in
-    pub container_name: String,
+    pub node_container_name: String,
+
+    // name of the container the tezedge monitoring resides in
+    pub monitoring_container_name: String,
 
     // path to the target directory for the snapshots
     pub snapshots_target_directory: PathBuf,
@@ -73,8 +76,15 @@ fn tezedge_snapshots_app() -> App<'static, 'static> {
                 }),
         )
         .arg(
-            Arg::with_name("container-name")
-                .long("container-name")
+            Arg::with_name("node-container-name")
+                .long("node-container-name")
+                .takes_value(true)
+                .value_name("STRING")
+                .help("The name of the container the tezedge node resides in"),
+        )
+        .arg(
+            Arg::with_name("monitoring-container-name")
+                .long("monitoring-container-name")
                 .takes_value(true)
                 .value_name("STRING")
                 .help("The name of the container the tezedge node resides in"),
@@ -142,9 +152,13 @@ impl TezedgeSnapshotEnvironment {
                 .unwrap_or("http://localhost:18732")
                 .parse::<Url>()
                 .expect("Was expecting a valid url"),
-            container_name: args
-                .value_of("container-name")
+            node_container_name: args
+                .value_of("node-container-name")
                 .unwrap_or("tezedge-node")
+                .to_string(),
+            monitoring_container_name: args
+                .value_of("monitoring-container-name")
+                .unwrap_or("tezedge-node-monitoring")
                 .to_string(),
             snapshots_target_directory: args
                 .value_of("snapshots-target-directory")
