@@ -126,7 +126,7 @@ fn tezedge_snapshots_app() -> App<'static, 'static> {
                 .long("check-interval")
                 .takes_value(true)
                 .value_name("U64")
-                .help("Interval in seconds to take check the node's head"),
+                .help("The interval in seconds to perform the check for can_snapshot"),
         )
         .arg(
             Arg::with_name("log-level")
@@ -177,7 +177,7 @@ impl TezedgeSnapshotEnvironment {
                 .to_string(),
             snapshots_target_directory: args
                 .value_of("snapshots-target-directory")
-                .unwrap_or("/tmp")
+                .unwrap_or("/tmp/snapshots")
                 .parse::<PathBuf>()
                 .expect("The provided path is invalid"),
             tezedge_database_directory: args

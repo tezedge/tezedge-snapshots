@@ -36,8 +36,6 @@ services:
     stop_signal: SIGINT
     command: [
       "--tezedge-node-url", "http://localhost:18732",
-      "--tezedge-database-directory", "/tmp/tezedge/",
-      "--snapshots-target-directory", "/tmp/snapshots",
       "--snapshot-frequency", "300",
       "--network", "${TEZOS_NETWORK-mainnet}"
     ]
