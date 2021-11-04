@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 use clap::{App, Arg};
-use std::{env, path::{Path, PathBuf}};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 use url::Url;
 
@@ -11,14 +14,17 @@ pub struct TezedgeSnapshotEnvironment {
     // logging level
     pub log_level: slog::Level,
 
-    // interval in seconds to check for the head of the node
-    pub head_check_interval: u64,
+    // interval in seconds to perform the check for can_snapshot
+    pub check_interval: u64,
 
     // the url to the node's rpc server
     pub tezedge_node_url: Url,
 
     // name of the container the tezedge node resides in
-    pub container_name: String,
+    pub node_container_name: String,
+
+    // name of the container the tezedge monitoring resides in
+    pub monitoring_container_name: String,
 
     // path to the target directory for the snapshots
     pub snapshots_target_directory: PathBuf,
@@ -27,7 +33,13 @@ pub struct TezedgeSnapshotEnvironment {
     pub tezedge_database_directory: PathBuf,
 
     // maximum number of snapshots kept on the machine
-    pub snapshot_capacity: u64,
+    pub snapshot_capacity: usize,
+
+    // frequency of the snapshots in seconds
+    pub snapshot_frequency: u64,
+
+    // network tezedge is connecting to
+    pub network: String,
 
     // TODO: add options for snapshot frequency in blocks
     // TODO: add options for snapshot frequency: daily, weekly, ... Note: in combination of timestamp?
@@ -68,11 +80,25 @@ fn tezedge_snapshots_app() -> App<'static, 'static> {
                 }),
         )
         .arg(
-            Arg::with_name("container-name")
-                .long("container-name")
+            Arg::with_name("node-container-name")
+                .long("node-container-name")
                 .takes_value(true)
                 .value_name("STRING")
                 .help("The name of the container the tezedge node resides in"),
+        )
+        .arg(
+            Arg::with_name("network")
+                .long("network")
+                .takes_value(true)
+                .value_name("STRING")
+                .help("The name of network tezedge is connecting to"),
+        )
+        .arg(
+            Arg::with_name("monitoring-container-name")
+                .long("monitoring-container-name")
+                .takes_value(true)
+                .value_name("STRING")
+                .help("The name of the container the tezedge monitoring resides in"),
         )
         .arg(
             Arg::with_name("tezedge-node-url")
@@ -85,15 +111,22 @@ fn tezedge_snapshots_app() -> App<'static, 'static> {
             Arg::with_name("snapshot-capacity")
                 .long("snapshot-capacity")
                 .takes_value(true)
-                .value_name("U64")
+                .value_name("USIZE")
                 .help("The maximum number of snapshots kept on the machine"),
         )
         .arg(
-            Arg::with_name("head-check-interval")
-                .long("head-check-interval")
+            Arg::with_name("snapshot-frequency")
+                .long("snapshot-frequency")
                 .takes_value(true)
                 .value_name("U64")
-                .help("Interval in seconds to take check the node's head"),
+                .help("The frequency of the snapshots in seconds"),
+        )
+        .arg(
+            Arg::with_name("check-interval")
+                .long("check-interval")
+                .takes_value(true)
+                .value_name("U64")
+                .help("The interval in seconds to perform the check for can_snapshot"),
         )
         .arg(
             Arg::with_name("log-level")
@@ -119,8 +152,8 @@ impl TezedgeSnapshotEnvironment {
                 .parse::<slog::Level>()
                 .expect("Was expecting one value from slog::Level"),
 
-            head_check_interval: args
-                .value_of("head-check-interval")
+            check_interval: args
+                .value_of("check-interval")
                 .unwrap_or("5")
                 .parse::<u64>()
                 .expect("Expected u64 value of seconds"),
@@ -130,13 +163,21 @@ impl TezedgeSnapshotEnvironment {
                 .unwrap_or("http://localhost:18732")
                 .parse::<Url>()
                 .expect("Was expecting a valid url"),
-            container_name: args
-                .value_of("container-name")
+            node_container_name: args
+                .value_of("node-container-name")
                 .unwrap_or("tezedge-node")
+                .to_string(),
+            monitoring_container_name: args
+                .value_of("monitoring-container-name")
+                .unwrap_or("tezedge-node-monitoring")
+                .to_string(),
+            network: args
+                .value_of("network")
+                .unwrap_or("network")
                 .to_string(),
             snapshots_target_directory: args
                 .value_of("snapshots-target-directory")
-                .unwrap_or("/tmp")
+                .unwrap_or("/tmp/snapshots")
                 .parse::<PathBuf>()
                 .expect("The provided path is invalid"),
             tezedge_database_directory: args
@@ -146,9 +187,14 @@ impl TezedgeSnapshotEnvironment {
                 .expect("The provided path is invalid"),
             snapshot_capacity: args
                 .value_of("snapshot-capacity")
-                .unwrap_or("10")
+                .unwrap_or("7")
+                .parse::<usize>()
+                .expect("Expected usize value"),
+            snapshot_frequency: args
+                .value_of("snapshot-frequency")
+                .unwrap_or("86400")
                 .parse::<u64>()
-                .expect("Expected u64 value")
+                .expect("Expected u64 value"),
         }
     }
 }
