@@ -16,6 +16,35 @@ tezedge-\<network_name\>-\<date\>-\<time\>-\<block_level\>
 
 The snapshot above comes from `granadanet` and was taken on the `4th of November 2021` at `13:57:56 UTC` and at block level `230849`.
 
+## Running
+
+1. Clone this repository
+
+```
+git clone https://github.com/tezedge/tezedge-snapshots.git
+```
+
+2. Set a few environmental variables. (This step is optional as you can set the environment variables before executing the command)
+
+```
+export NODE_HOSTNAME_OR_IP=<public IP address of the machine you run the snapshotter or its domain>
+export TEZOS_NETWORK=<tezos network to connect to>
+export TEZEDGE_VOLUME_PATH=<path to the tezedge databases>
+export TEZEDGE_SNAPSHOTS_VOLUME_PATH=<path to the directory you want your snapshots saved to>
+```
+
+3. Run the docoker-compose
+
+```
+docker-compose -f docker-compose.yml up -d
+```
+
+4. Alternatively, you can combine step 2 and 3 into a single one liner
+
+```
+NODE_HOSTNAME_OR_IP=116.202.128.230 TEZOS_NETWORK=granadanet TEZEDGE_VOLUME_PATH="/path/to/tezedge" TEZEDGE_SNAPSHOTS_VOLUME_PATH="/path/to/snapshots"  docker-compose -f docker-compose.yml up -d
+```
+
 ## Options
 
 - `snapshots-target-directory`: The path to the target directory for the snapshots
