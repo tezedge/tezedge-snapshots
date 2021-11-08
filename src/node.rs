@@ -145,7 +145,7 @@ impl TezedgeNodeController {
         snapshot_capacity: usize,
     ) -> Result<(), TezedgeNodeControllerError> {
         self.last_snapshot_timestamp = Some(Instant::now());
-        let head_level = self.get_head().await?.level;
+        let head_block_hash = self.get_head().await?.hash;
 
         // 1. stop the node container
         info!(self.log, "Stopping tezedge container (1/6)");
@@ -162,42 +162,7 @@ impl TezedgeNodeController {
             .take(1)
             .collect();
 
-        // 2. copy out the database directories to a temp folder
-        info!(self.log, "Extracting node databases (2/6)");
-
-        let copy_options = dir::CopyOptions {
-            content_only: true,
-            ..Default::default()
-        };
-
-        let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
-        let snapshot_path =
-            temp_destination.join(Path::new(&format!("{}-{}-{}-{}-{}", "tezedge", self.network, date, time, head_level)));
-
-        if !snapshot_path.exists() {
-            dir::create_all(&snapshot_path, false)?;
-        }
-
-        let to_remove = vec![self.database_directory.join("context/index/lock")];
-        fs_extra::remove_items(&to_remove)?;
-
-        dir::copy(&self.database_directory, &snapshot_path, &copy_options)?;
-
-        // 3. remove identity and log files
-        info!(self.log, "Removing unnecessary files (log, identity) (3/6)");
-
-        // collect all log files present in the snapshot
-        let mut to_remove: Vec<PathBuf> = dir::get_dir_content(&snapshot_path)?
-            .files
-            .iter()
-            .filter(|s| s.contains(".log"))
-            .map(|s| snapshot_path.join(s))
-            .collect();
-
-        to_remove.push(snapshot_path.join("identity.json"));
-        fs_extra::remove_items(&to_remove)?;
-
-        info!(self.log, "Checking for rolling (4/6)");
+        info!(self.log, "Checking for rolling (2/6)");
 
         // identify and remove the oldest snapshot in the target dir, if we are over capacity
         let current_snapshots = dir::get_dir_content(&self.snapshots_target_directory)?
@@ -226,6 +191,41 @@ impl TezedgeNodeController {
             info!(self.log, "Rolling snapshots - Removing oldest snapshot");
             fs_extra::remove_items(&[dir_times[0].0.clone()])?;
         }
+
+        // 2. copy out the database directories to a temp folder
+        info!(self.log, "Extracting node databases (3/6)");
+
+        let copy_options = dir::CopyOptions {
+            content_only: true,
+            ..Default::default()
+        };
+
+        let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
+        let snapshot_path =
+            temp_destination.join(Path::new(&format!("{}_{}_{}-{}_{}", "tezedge", self.network, date, time, head_block_hash)));
+
+        if !snapshot_path.exists() {
+            dir::create_all(&snapshot_path, false)?;
+        }
+
+        let to_remove = vec![self.database_directory.join("context/index/lock")];
+        fs_extra::remove_items(&to_remove)?;
+
+        dir::copy(&self.database_directory, &snapshot_path, &copy_options)?;
+
+        // 3. remove identity and log files
+        info!(self.log, "Removing unnecessary files (log, identity) (4/6)");
+
+        // collect all log files present in the snapshot
+        let mut to_remove: Vec<PathBuf> = dir::get_dir_content(&snapshot_path)?
+            .files
+            .iter()
+            .filter(|s| s.contains(".log"))
+            .map(|s| snapshot_path.join(s))
+            .collect();
+
+        to_remove.push(snapshot_path.join("identity.json"));
+        fs_extra::remove_items(&to_remove)?;
 
         // 5. move to the destination
         info!(self.log, "Moving snapshot to the target directory (5/6)");

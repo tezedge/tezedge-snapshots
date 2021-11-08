@@ -6,9 +6,12 @@ ARG rust_toolchain="nightly-2021-08-04"
 RUN curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain ${rust_toolchain} -y
 ENV PATH=/root/.cargo/bin:$PATH
 
-# TODO: make repository public + build from cloned repo
-COPY . /opt
+ARG tezedge_snapshots_git="https://github.com/tezedge/tezedge-snapshots.git"
 
-RUN cd /opt/src && cargo build --release
+RUN git clone ${tezedge_snapshots_git} && cd tezedge-snapshots && pwd && cargo build --release
 
-ENTRYPOINT [ "/opt/target/release/tezedge-snapshots" ]
+FROM gcr.io/distroless/cc-debian10
+
+COPY --from=build-env /tezedge-snapshots/target/release/tezedge-snapshots /
+
+ENTRYPOINT [ "/tezedge-snapshots" ]
