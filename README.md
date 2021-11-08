@@ -8,13 +8,13 @@ Installed docker and docker-compose.
 
 ## Snapshots
 
-tezedge-\<network_name\>-\<date\>-\<time\>-\<block_level\>
+tezedge_\<network_name\>_\<date\>-\<time\>_\<block_hash\>
 
 ### Example
 
-`tezedge-granadanet-20211104-135756-230849`
+`tezedge_granadanet_20211108-104156_BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe`
 
-The snapshot above comes from `granadanet` and was taken on the `4th of November 2021` at `13:57:56 UTC` and at block level `230849`.
+The snapshot above comes from `granadanet` and was taken on the `8th of November 2021` at `10:41:56 UTC` and at block `BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe`.
 
 ## Running
 

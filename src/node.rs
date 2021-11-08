@@ -145,7 +145,7 @@ impl TezedgeNodeController {
         snapshot_capacity: usize,
     ) -> Result<(), TezedgeNodeControllerError> {
         self.last_snapshot_timestamp = Some(Instant::now());
-        let head_level = self.get_head().await?.level;
+        let head_block_hash = self.get_head().await?.hash;
 
         // 1. stop the node container
         info!(self.log, "Stopping tezedge container (1/6)");
@@ -202,7 +202,7 @@ impl TezedgeNodeController {
 
         let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
         let snapshot_path =
-            temp_destination.join(Path::new(&format!("{}-{}-{}-{}-{}", "tezedge", self.network, date, time, head_level)));
+            temp_destination.join(Path::new(&format!("{}_{}_{}-{}_{}", "tezedge", self.network, date, time, head_block_hash)));
 
         if !snapshot_path.exists() {
             dir::create_all(&snapshot_path, false)?;
