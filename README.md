@@ -57,3 +57,29 @@ NODE_HOSTNAME_OR_IP=116.202.128.230 TEZOS_NETWORK=granadanet TEZEDGE_VOLUME_PATH
 - `node-container-name`: The name of the container the tezedge node resides in
 - `monitoring-container-name`: The name of the container the tezedge monitoring resides in
 - `log-level`: Set logging level
+
+## Nginx fancy index configuration
+
+```
+location /Nginx-Fancyindex-Theme {
+        root /path/to/Nginx-Fancyindex-Theme;
+}
+
+location / {
+        root /path/to/snapshots;
+        # fancyindex specific settings
+        fancyindex on;
+        fancyindex_localtime on;
+        fancyindex_exact_size off;
+        fancyindex_header "/Nginx-Fancyindex-Theme-dark/header.html";
+        fancyindex_footer "/Nginx-Fancyindex-Theme-dark/footer.html";
+        fancyindex_ignore "examplefile.html"; # Ignored files will not show up in the directory listing, but will still be public.
+        fancyindex_ignore "Nginx-Fancyindex-Theme-dark"; # Making sure folder where files are don't show up in the listing.
+        fancyindex_ignore "^.*.\.temp"; # Ignore the directory while it has .temp at the end of it's name indication copy in progress.
+        fancyindex_ignore "^\..*";
+        # Warning: if you use an old version of ngx-fancyindex, comment the last line if you
+        # encounter a bug. See https://github.com/Naereen/Nginx-Fancyindex-Theme/issues/10
+        fancyindex_name_length 255; # Maximum file name length in bytes, change as you like.
+        fancyindex_default_sort date_desc;
+}
+```
