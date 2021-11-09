@@ -162,6 +162,10 @@ impl TezedgeNodeController {
             .take(1)
             .collect();
 
+        // we start by giving the directory a "temporary" name so we can ignore it until the copy has finished
+        let snapshot_name_temp = format!("{}_{}_{}-{}_{}.temp", "tezedge", self.network, date, time, head_block_hash);
+        let snapshot_name = format!("{}_{}_{}-{}_{}", "tezedge", self.network, date, time, head_block_hash);
+
         info!(self.log, "Checking for rolling (2/6)");
 
         // identify and remove the oldest snapshot in the target dir, if we are over capacity
@@ -202,7 +206,7 @@ impl TezedgeNodeController {
 
         let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
         let snapshot_path =
-            temp_destination.join(Path::new(&format!("{}_{}_{}-{}_{}", "tezedge", self.network, date, time, head_block_hash)));
+            temp_destination.join(Path::new(&snapshot_name_temp));
 
         if !snapshot_path.exists() {
             dir::create_all(&snapshot_path, false)?;
@@ -235,6 +239,9 @@ impl TezedgeNodeController {
             &self.snapshots_target_directory,
             &copy_options,
         )?;
+
+        // rename to the final name removing .temp indicating that the copy has been complete
+        fs::rename(self.snapshots_target_directory.join(&snapshot_name_temp), self.snapshots_target_directory.join(&snapshot_name))?;
 
         // remove the tmp folder
         fs_extra::remove_items(&[snapshot_path])?;
