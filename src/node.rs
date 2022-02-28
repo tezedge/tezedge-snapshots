@@ -125,6 +125,7 @@ impl TezedgeNodeController {
         &self,
         from_dir: &str,
         snapshot_name: &str,
+        snapshot_capacity: usize,
     ) -> Result<(), TezedgeNodeControllerError> {
         let docker = Docker::connect_with_socket_defaults()?;
         info!(self.log, "Taking Full snapshot");
@@ -132,6 +133,7 @@ impl TezedgeNodeController {
         let image = "tezedge/tezedge:latest";
         let cont_name = format!("tezedge-snapshots-full-{}", self.network);
         let snapshot_name = format!("{}_full", snapshot_name);
+        let snapshot_name_temp = format!("{}.temp", &snapshot_name);
 
         let full_snapshots_target_directory = self.snapshots_target_directory.join("full");
 
@@ -139,7 +141,10 @@ impl TezedgeNodeController {
             dir::create_all(&full_snapshots_target_directory, false)?;
         }
 
-        let snapshot_path = full_snapshots_target_directory.join(snapshot_name);
+        // check for rolling
+        self.check_rolling(&full_snapshots_target_directory, snapshot_capacity)?;
+
+        let snapshot_path = full_snapshots_target_directory.join(&snapshot_name_temp);
         if !snapshot_path.exists() {
             dir::create_all(&snapshot_path, false)?;
         }
@@ -162,54 +167,38 @@ impl TezedgeNodeController {
             &snapshot_path_string,
         ];
 
-        let mut filter = HashMap::new();
-        filter.insert(
-            String::from("name"),
-            vec![String::from("tezedge-snapshots-full")],
-        );
-        let containers = &docker
-            .list_containers(Some(ListContainersOptions {
-                all: true,
-                filters: filter,
+        info!(self.log, "Creating full snapshotting tezedge container");
+        let snapshot_host_path = env::var("TEZEDGE_SNAPSHOTS_VOLUME_PATH").unwrap_or_else(|_| {
+            self.snapshots_target_directory
+                .to_string_lossy()
+                .to_string()
+        });
+        let host_config = HostConfig {
+            mounts: Some(vec![Mount {
+                target: Some(
+                    self.snapshots_target_directory
+                        .to_string_lossy()
+                        .to_string(),
+                ),
+                source: Some(snapshot_host_path.clone()),
+                typ: Some(MountTypeEnum::BIND),
                 ..Default::default()
-            }))
-            .await
-            .unwrap();
+            }]),
+            ..Default::default()
+        };
 
-        if containers.is_empty() {
-            info!(self.log, "Creating full snapshotting tezedge container");
-            let snapshot_host_path = env::var("TEZEDGE_SNAPSHOTS_VOLUME_PATH").unwrap_or_else(|_| {
-                self.snapshots_target_directory
-                    .to_string_lossy()
-                    .to_string()
-            });
-            let host_config = HostConfig {
-                mounts: Some(vec![Mount {
-                    target: Some(
-                        self.snapshots_target_directory
-                            .to_string_lossy()
-                            .to_string(),
-                    ),
-                    source: Some(snapshot_host_path.clone()),
-                    typ: Some(MountTypeEnum::BIND),
-                    ..Default::default()
-                }]),
-                ..Default::default()
-            };
+        let config = Config {
+            image: Some(image),
+            host_config: Some(host_config),
+            entrypoint: Some(entrypoint),
+            ..Default::default()
+        };
 
-            let config = Config {
-                image: Some(image),
-                host_config: Some(host_config),
-                entrypoint: Some(entrypoint),
-                ..Default::default()
-            };
+        let opts = CreateContainerOptions { name: cont_name.clone() };
 
-            let opts = CreateContainerOptions { name: cont_name.clone() };
-
-            docker
-                .create_container::<String, &str>(Some(opts), config)
-                .await?;
-        }
+        docker
+            .create_container::<String, &str>(Some(opts), config)
+            .await?;
 
         docker.start_container::<String>(&cont_name, None).await?;
 
@@ -217,7 +206,17 @@ impl TezedgeNodeController {
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
 
+        // rename to the final name removing .temp indicating that the copy has been complete
+        fs::rename(
+            full_snapshots_target_directory.join(&snapshot_name_temp),
+            full_snapshots_target_directory.join(&snapshot_name),
+        )?;
+
+
         info!(self.log, "Full snapshot created");
+
+        info!(self.log, "Removing full snapshotting tezedge container");
+        docker.remove_container(&cont_name, None).await?;
 
         Ok(())
     }
@@ -249,36 +248,36 @@ impl TezedgeNodeController {
         }
     }
 
-    // fn check_rolling(&self, snapshot_dir: PathBuf, snapshot_capacity: usize) -> Result<(), TezedgeNodeControllerError> {
-    //     // identify and remove the oldest snapshot in the target dir, if we are over capacity
-    //     let current_snapshots = dir::get_dir_content(&snapshot_dir)?
-    //         .directories
-    //         .iter()
-    //         .map(|dir| snapshot_dir.join(dir))
-    //         // we need the only the direct directories contained in the main directory, filter out all deeper sub directories
-    //         .filter(|p| {
-    //             p.components().count() == snapshot_dir.components().count() + 1
-    //         })
-    //         .collect::<Vec<PathBuf>>();
+    fn check_rolling(&self, snapshot_dir: &Path, snapshot_capacity: usize) -> Result<(), TezedgeNodeControllerError> {
+        // identify and remove the oldest snapshot in the target dir, if we are over capacity
+        let current_snapshots = dir::get_dir_content(&snapshot_dir)?
+            .directories
+            .iter()
+            .map(|dir| snapshot_dir.join(dir))
+            // we need the only the direct directories contained in the main directory, filter out all deeper sub directories
+            .filter(|p| {
+                p.components().count() == snapshot_dir.components().count() + 1
+            })
+            .collect::<Vec<PathBuf>>();
 
-    //     // collect all last_modified times
-    //     let mut dir_times: Vec<(PathBuf, FileTime)> = vec![];
-    //     for snapshot_path in current_snapshots {
-    //         let meta = fs::metadata(&snapshot_path)?;
-    //         let last_modified = FileTime::from_last_modification_time(&meta);
-    //         dir_times.push((snapshot_path, last_modified));
-    //     }
+        // collect all last_modified times
+        let mut dir_times: Vec<(PathBuf, FileTime)> = vec![];
+        for snapshot_path in current_snapshots {
+            let meta = fs::metadata(&snapshot_path)?;
+            let last_modified = FileTime::from_last_modification_time(&meta);
+            dir_times.push((snapshot_path, last_modified));
+        }
 
-    //     // sort by times
-    //     dir_times.sort_by(|a, b| a.1.cmp(&b.1));
+        // sort by times
+        dir_times.sort_by(|a, b| a.1.cmp(&b.1));
 
-    //     // remove the oldest file if over capacity
-    //     if dir_times.len() >= snapshot_capacity {
-    //         info!(self.log, "Rolling snapshots - Removing oldest snapshot");
-    //         fs_extra::remove_items(&[dir_times[0].0.clone()])?;
-    //     }
-    //     Ok(())
-    // }
+        // remove the oldest file if over capacity
+        if dir_times.len() >= snapshot_capacity {
+            info!(self.log, "Rolling snapshots - Removing oldest snapshot");
+            fs_extra::remove_items(&[dir_times[0].0.clone()])?;
+        }
+        Ok(())
+    }
 
     /// Takes a snapshot of the tezedge node
     pub async fn take_snapshot(
@@ -325,32 +324,7 @@ impl TezedgeNodeController {
         info!(self.log, "Checking for rolling (2/6)");
 
         // identify and remove the oldest snapshot in the target dir, if we are over capacity
-        let current_snapshots = dir::get_dir_content(&archive_snapshots_target_directory)?
-            .directories
-            .iter()
-            .map(|dir| archive_snapshots_target_directory.join(dir))
-            // we need the only the direct directories contained in the main directory, filter out all deeper sub directories
-            .filter(|p| {
-                p.components().count() == archive_snapshots_target_directory.components().count() + 1
-            })
-            .collect::<Vec<PathBuf>>();
-
-        // collect all last_modified times
-        let mut dir_times: Vec<(PathBuf, FileTime)> = vec![];
-        for snapshot_path in current_snapshots {
-            let meta = fs::metadata(&snapshot_path)?;
-            let last_modified = FileTime::from_last_modification_time(&meta);
-            dir_times.push((snapshot_path, last_modified));
-        }
-
-        // sort by times
-        dir_times.sort_by(|a, b| a.1.cmp(&b.1));
-
-        // remove the oldest file if over capacity
-        if dir_times.len() >= snapshot_capacity {
-            info!(self.log, "Rolling snapshots - Removing oldest snapshot");
-            fs_extra::remove_items(&[dir_times[0].0.clone()])?;
-        }
+        self.check_rolling(&archive_snapshots_target_directory, snapshot_capacity)?;
 
         // 2. copy out the database directories to a temp folder
         info!(self.log, "Extracting node databases (3/6)");
@@ -360,8 +334,8 @@ impl TezedgeNodeController {
             ..Default::default()
         };
 
-        // let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
-        let temp_destination = self.database_directory.join("temp_destination");
+        let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
+        // let temp_destination = self.database_directory.join("temp_destination");
         let snapshot_path = temp_destination.join(Path::new(&snapshot_name_temp));
 
         if !snapshot_path.exists() {
@@ -414,6 +388,7 @@ impl TezedgeNodeController {
                     .to_string_lossy()
                     .to_string(),
                 &snapshot_name,
+                snapshot_capacity,
             )
             .await?;
         }
