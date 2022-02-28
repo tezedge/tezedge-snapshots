@@ -1,11 +1,11 @@
 // Copyright (c) SimpleStaking, Viable Systems and Tezedge Contributors
 // SPDX-License-Identifier: MIT
 
+use bollard::Docker;
 use chrono::Utc;
 use filetime::FileTime;
 use fs_extra::dir;
 use serde::Deserialize;
-use shiplift::Docker;
 use slog::{info, Logger};
 use std::{
     fs,
@@ -18,23 +18,7 @@ use url::{ParseError, Url};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct TezosBlockHeader {
-    protocol: String,
-    chain_id: String,
     hash: String,
-    level: i32,
-    proto: i32, // TODO: verify
-    predecessor: String,
-    timestamp: String,   // TODO: rc-3999 format? Verify
-    validation_pass: u8, // TODO: verify
-    operations_hash: String,
-    fitness: Vec<String>,
-    context: String,
-    priority: u64, //TODO: verify
-    proof_of_work_nonce: String,
-    signature: String,
-
-    // introduced in newer protocols
-    liquidity_baking_escape_vote: Option<bool>,
 }
 pub struct TezedgeNodeController {
     url: Url,
@@ -56,7 +40,7 @@ pub enum TezedgeNodeControllerError {
     #[error("Request to the node failed: {0}")]
     FailedRequest(#[from] reqwest::Error),
     #[error("Docker operation failed: {0}")]
-    DockerError(#[from] shiplift::Error),
+    DockerError(#[from] bollard::errors::Error),
     #[error("Filesystem operation failed: {0}")]
     FilesystemError(#[from] fs_extra::error::Error),
     #[error("Io error: {0}")]
@@ -95,43 +79,26 @@ impl TezedgeNodeController {
 
     /// Stops the tezedge container
     pub async fn stop(&self) -> Result<(), TezedgeNodeControllerError> {
-        let docker = Docker::new();
+        let docker = Docker::connect_with_socket_defaults()?;
 
-        docker
-            .containers()
-            .get(&self.node_container_name)
-            .stop(Some(Duration::from_secs(10)))
-            .await?;
+        docker.stop_container(&self.node_container_name, None).await?;
 
         info!(self.log, "Tezedge node container stopped");
 
-        docker
-            .containers()
-            .get(&self.monitoring_container_name)
-            .stop(Some(Duration::from_secs(10)))
-            .await?;
-        info!(self.log, "Tezedge node monitoring container stopped");
+        docker.stop_container(&self.monitoring_container_name, None).await?;
         
         Ok(())
     }
 
     /// Starts the tezedge container
     pub async fn start(&self) -> Result<(), TezedgeNodeControllerError> {
-        let docker = Docker::new();
+        let docker = Docker::connect_with_socket_defaults()?;
 
-        docker
-            .containers()
-            .get(&self.node_container_name)
-            .start()
-            .await?;
+        docker.start_container::<String>(&self.node_container_name, None).await?;
 
         info!(self.log, "Tezedge node container started");
 
-        docker
-            .containers()
-            .get(&self.monitoring_container_name)
-            .start()
-            .await?;
+        docker.start_container::<String>(&self.monitoring_container_name, None).await?;
 
         info!(self.log, "Tezedge node monitoring container started");
         // TODO: preform a health check with get_head
