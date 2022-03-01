@@ -28,6 +28,7 @@ async fn main() {
         snapshot_capacity,
         snapshot_frequency,
         network,
+        snapshot_type,
     } = env;
 
     // create an slog logger
@@ -51,7 +52,7 @@ async fn main() {
         while running_thread.load(std::sync::atomic::Ordering::Acquire) {
             if node.can_snapshot(snapshot_frequency).await {
                 info!(thread_log, "Taking new snapshot");
-                if let Err(e) = node.take_snapshot(snapshot_capacity).await {
+                if let Err(e) = node.take_snapshot(snapshot_capacity, &snapshot_type).await {
                     match e {
                         TezedgeNodeControllerError::NodeUnreachable => warn!(thread_log, "{:?}", e),
                         _ => {

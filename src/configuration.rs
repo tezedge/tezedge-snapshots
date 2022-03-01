@@ -5,6 +5,7 @@ use clap::{App, Arg};
 use std::{
     env,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use url::Url;
@@ -41,9 +42,34 @@ pub struct TezedgeSnapshotEnvironment {
     // network tezedge is connecting to
     pub network: String,
 
+    // what snapshots to create
+    pub snapshot_type: SnapshotType,
     // TODO: add options for snapshot frequency in blocks
     // TODO: add options for snapshot frequency: daily, weekly, ... Note: in combination of timestamp?
     // TODO: add options for concrete levels to snapshot on
+}
+
+#[derive(Clone, Debug)]
+pub enum SnapshotType {
+    Archive,
+    Full,
+    All,
+}
+
+#[derive(Clone, Debug)]
+pub struct SnapshotTypeNotFound {}
+
+impl FromStr for SnapshotType {
+    type Err = SnapshotTypeNotFound;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "archive" => Ok(SnapshotType::Archive),
+            "full" => Ok(SnapshotType::Full),
+            "all" => Ok(SnapshotType::All),
+            _ => Err(SnapshotTypeNotFound {}),
+        }
+    }
 }
 
 fn tezedge_snapshots_app() -> App<'static, 'static> {
@@ -129,6 +155,13 @@ fn tezedge_snapshots_app() -> App<'static, 'static> {
                 .help("The interval in seconds to perform the check for can_snapshot"),
         )
         .arg(
+            Arg::with_name("snapshot-type")
+                .long("snapshot-type")
+                .takes_value(true)
+                .value_name("SnapshotType")
+                .help("Type of the snapshots"),
+        )
+        .arg(
             Arg::with_name("log-level")
                 .long("log-level")
                 .takes_value(true)
@@ -171,10 +204,7 @@ impl TezedgeSnapshotEnvironment {
                 .value_of("monitoring-container-name")
                 .unwrap_or("tezedge-node-monitoring")
                 .to_string(),
-            network: args
-                .value_of("network")
-                .unwrap_or("network")
-                .to_string(),
+            network: args.value_of("network").unwrap_or("network").to_string(),
             snapshots_target_directory: args
                 .value_of("snapshots-target-directory")
                 .unwrap_or("/tmp/snapshots")
@@ -195,6 +225,11 @@ impl TezedgeSnapshotEnvironment {
                 .unwrap_or("86400")
                 .parse::<u64>()
                 .expect("Expected u64 value"),
+            snapshot_type: args
+                .value_of("snapshot-type")
+                .unwrap_or("all")
+                .parse::<SnapshotType>()
+                .expect("Expected values archive, full or all"),
         }
     }
 }
