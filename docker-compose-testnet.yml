@@ -36,6 +36,7 @@ services:
     stop_signal: SIGINT
     environment:
       - TEZEDGE_SNAPSHOTS_VOLUME_PATH=${TEZEDGE_SNAPSHOTS_VOLUME_PATH}
+      - TEZEDGE_VOLUME_PATH=${TEZEDGE_VOLUME_PATH}
     command: [
       "--tezedge-node-url", "http://localhost:19999",
       "--snapshot-frequency", "300",

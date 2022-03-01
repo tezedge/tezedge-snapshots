@@ -121,6 +121,85 @@ impl TezedgeNodeController {
         Ok(())
     }
 
+    async fn take_archive_snapshot(
+        &mut self,
+        snapshot_capacity: usize,
+        snapshot_name: &str,
+    ) -> Result<PathBuf, TezedgeNodeControllerError> {
+        // we start by giving the directory a "temporary" name so we can ignore it until the copy has finished
+        let snapshot_name_temp = format!("{}.temp", snapshot_name);
+
+        let archive_snapshot_name = format!("{}_archive", snapshot_name);
+
+        let archive_snapshots_target_directory = self.snapshots_target_directory.join("archive");
+
+        if !archive_snapshots_target_directory.exists() {
+            dir::create_all(&archive_snapshots_target_directory, false)?;
+        }
+
+        info!(self.log, "[Archive] Checking for rolling older snapshots (1/5)");
+
+        // identify and remove the oldest snapshot in the target dir, if we are over capacity
+        self.check_rolling(&archive_snapshots_target_directory, snapshot_capacity)?;
+
+        // 2. copy out the database directories to a temp folder
+        info!(self.log, "[Archive] Extracting node databases (2/5)");
+
+        let copy_options = dir::CopyOptions {
+            content_only: true,
+            ..Default::default()
+        };
+
+        let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
+        // let temp_destination = self.database_directory.join("temp_destination");
+        let snapshot_path = temp_destination.join(Path::new(&snapshot_name_temp));
+
+        if !snapshot_path.exists() {
+            dir::create_all(&snapshot_path, false)?;
+        }
+
+        let to_remove = vec![self.database_directory.join("context/index/lock")];
+        fs_extra::remove_items(&to_remove)?;
+
+        dir::copy(&self.database_directory, &snapshot_path, &copy_options)?;
+
+        // 3. remove identity and log files
+        info!(self.log, "[Archive] Removing unnecessary files (log, identity) (3/5)");
+
+        // collect all log files present in the snapshot
+        let mut to_remove: Vec<PathBuf> = dir::get_dir_content(&snapshot_path)?
+            .files
+            .iter()
+            .filter(|s| s.contains(".log"))
+            .map(|s| snapshot_path.join(s))
+            .collect();
+
+        to_remove.push(snapshot_path.join("identity.json"));
+        fs_extra::remove_items(&to_remove)?;
+
+        // 4. move to the destination
+        info!(self.log, "[Archive] Moving snapshot to the target directory (4/5)");
+        let copy_options = dir::CopyOptions::new();
+        dir::move_dir(
+            snapshot_path.clone(),
+            &archive_snapshots_target_directory,
+            &copy_options,
+        )?;
+
+        // . move to the destination
+        info!(self.log, "[Archive] Removing .temp from the snapshot directory (5/5)");
+        // rename to the final name removing .temp indicating that the copy has been complete
+        fs::rename(
+            archive_snapshots_target_directory.join(&snapshot_name_temp),
+            archive_snapshots_target_directory.join(&archive_snapshot_name),
+        )?;
+
+        // remove the tmp folder
+        fs_extra::remove_items(&[snapshot_path])?;
+
+        Ok(archive_snapshots_target_directory.join(&archive_snapshot_name))
+    }
+
     async fn take_full_snapshot(
         &self,
         from_dir: &str,
@@ -128,7 +207,11 @@ impl TezedgeNodeController {
         snapshot_capacity: usize,
     ) -> Result<(), TezedgeNodeControllerError> {
         let docker = Docker::connect_with_socket_defaults()?;
-        info!(self.log, "Taking Full snapshot");
+
+        if self.database_directory.join("context/index/lock").exists() {
+            let to_remove = vec![self.database_directory.join("context/index/lock")];
+            fs_extra::remove_items(&to_remove)?;
+        }
 
         let image = "tezedge/tezedge:latest";
         let cont_name = format!("tezedge-snapshots-full-{}", self.network);
@@ -142,6 +225,7 @@ impl TezedgeNodeController {
         }
 
         // check for rolling
+        info!(self.log, "[Full] Checking for rolling older snapshots (1/6)");
         self.check_rolling(&full_snapshots_target_directory, snapshot_capacity)?;
 
         let snapshot_path = full_snapshots_target_directory.join(&snapshot_name_temp);
@@ -167,8 +251,13 @@ impl TezedgeNodeController {
             &snapshot_path_string,
         ];
 
-        info!(self.log, "Creating full snapshotting tezedge container");
+        info!(self.log, "[Full] Creating full snapshotting tezedge container (2/6)");
         let snapshot_host_path = env::var("TEZEDGE_SNAPSHOTS_VOLUME_PATH").unwrap_or_else(|_| {
+            self.snapshots_target_directory
+                .to_string_lossy()
+                .to_string()
+        });
+        let tezedge_host_path = env::var("TEZEDGE_VOLUME_PATH").unwrap_or_else(|_| {
             self.snapshots_target_directory
                 .to_string_lossy()
                 .to_string()
@@ -183,7 +272,18 @@ impl TezedgeNodeController {
                 source: Some(snapshot_host_path.clone()),
                 typ: Some(MountTypeEnum::BIND),
                 ..Default::default()
-            }]),
+            },
+            Mount {
+                target: Some(
+                    self.database_directory
+                        .to_string_lossy()
+                        .to_string(),
+                ),
+                source: Some(tezedge_host_path.clone()),
+                typ: Some(MountTypeEnum::BIND),
+                ..Default::default()
+            }
+            ]),
             ..Default::default()
         };
 
@@ -200,22 +300,22 @@ impl TezedgeNodeController {
             .create_container::<String, &str>(Some(opts), config)
             .await?;
 
+        info!(self.log, "[Full] Starting full snapshotting tezedge container (3/6)");
         docker.start_container::<String>(&cont_name, None).await?;
 
         while let Ok(true) = Self::is_running(&cont_name).await {
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
+        info!(self.log, "[Full] Full Snapshotting tezedge container finished (4/6)");
 
         // rename to the final name removing .temp indicating that the copy has been complete
+        info!(self.log, "[Full] Removing .temp from the snapshot directory (5/6)");
         fs::rename(
             full_snapshots_target_directory.join(&snapshot_name_temp),
             full_snapshots_target_directory.join(&snapshot_name),
         )?;
 
-
-        info!(self.log, "Full snapshot created");
-
-        info!(self.log, "Removing full snapshotting tezedge container");
+        info!(self.log, "[Full] Removing Full Snapshotting tezedge container (6/6)");
         docker.remove_container(&cont_name, None).await?;
 
         Ok(())
@@ -288,10 +388,6 @@ impl TezedgeNodeController {
         self.last_snapshot_timestamp = Some(Instant::now());
         let head_block_hash = self.get_head().await?.hash;
 
-        // 1. stop the node container
-        info!(self.log, "Stopping tezedge container (1/6)");
-        self.stop().await?;
-
         // get the time for the snapshot title
         let now = Utc::now().naive_utc();
         let date = now.date().to_string().replace('-', "");
@@ -303,98 +399,45 @@ impl TezedgeNodeController {
             .take(1)
             .collect();
 
-        // we start by giving the directory a "temporary" name so we can ignore it until the copy has finished
-        let snapshot_name_temp = format!(
-            "{}_{}_{}-{}_{}.temp",
-            "tezedge", self.network, date, time, head_block_hash
-        );
         let snapshot_name = format!(
             "{}_{}_{}-{}_{}",
             "tezedge", self.network, date, time, head_block_hash
         );
 
-        let archive_snapshot_name = format!("{}_archive", snapshot_name);
+        // 1. stop the node container
+        info!(self.log, "Stopping tezedge container");
+        self.stop().await?;
 
-        let archive_snapshots_target_directory = self.snapshots_target_directory.join("archive");
-
-        if !archive_snapshots_target_directory.exists() {
-            dir::create_all(&archive_snapshots_target_directory, false)?;
+        match snapshot_type {
+            SnapshotType::Archive => {
+                self.take_archive_snapshot(snapshot_capacity, &snapshot_name).await?;
+            },
+            SnapshotType::Full => {
+                self.take_full_snapshot(
+                    &self.database_directory
+                        .to_string_lossy()
+                        .to_string(),
+                    &snapshot_name,
+                    snapshot_capacity,
+                )
+                .await?;
+            },
+            SnapshotType::All => {
+                let archive_snapshot_path = self.take_archive_snapshot(snapshot_capacity, &snapshot_name).await?;
+                self.take_full_snapshot(
+                        &archive_snapshot_path
+                        .to_string_lossy()
+                        .to_string(),
+                    &snapshot_name,
+                    snapshot_capacity,
+                )
+                .await?;
+            },
         }
-
-        info!(self.log, "Checking for rolling (2/6)");
-
-        // identify and remove the oldest snapshot in the target dir, if we are over capacity
-        self.check_rolling(&archive_snapshots_target_directory, snapshot_capacity)?;
-
-        // 2. copy out the database directories to a temp folder
-        info!(self.log, "Extracting node databases (3/6)");
-
-        let copy_options = dir::CopyOptions {
-            content_only: true,
-            ..Default::default()
-        };
-
-        let temp_destination = Path::new("/tmp/tezedge-snapshots-tmp");
-        // let temp_destination = self.database_directory.join("temp_destination");
-        let snapshot_path = temp_destination.join(Path::new(&snapshot_name_temp));
-
-        if !snapshot_path.exists() {
-            dir::create_all(&snapshot_path, false)?;
-        }
-
-        let to_remove = vec![self.database_directory.join("context/index/lock")];
-        fs_extra::remove_items(&to_remove)?;
-
-        dir::copy(&self.database_directory, &snapshot_path, &copy_options)?;
-
-        // 3. remove identity and log files
-        info!(self.log, "Removing unnecessary files (log, identity) (4/6)");
-
-        // collect all log files present in the snapshot
-        let mut to_remove: Vec<PathBuf> = dir::get_dir_content(&snapshot_path)?
-            .files
-            .iter()
-            .filter(|s| s.contains(".log"))
-            .map(|s| snapshot_path.join(s))
-            .collect();
-
-        to_remove.push(snapshot_path.join("identity.json"));
-        fs_extra::remove_items(&to_remove)?;
-
-        // 5. move to the destination
-        info!(self.log, "Moving snapshot to the target directory (5/6)");
-        let copy_options = dir::CopyOptions::new();
-        dir::move_dir(
-            snapshot_path.clone(),
-            &archive_snapshots_target_directory,
-            &copy_options,
-        )?;
-
-        // rename to the final name removing .temp indicating that the copy has been complete
-        fs::rename(
-            archive_snapshots_target_directory.join(&snapshot_name_temp),
-            archive_snapshots_target_directory.join(&archive_snapshot_name),
-        )?;
 
         // 6. start the node container back up
-        info!(self.log, "Starting back up the tezedge container (6/6)");
+        info!(self.log, "Starting back up the tezedge container");
         self.start().await?;
-
-        // TODO: match and cover all cases
-        if let SnapshotType::All = snapshot_type {
-            self.take_full_snapshot(
-                &archive_snapshots_target_directory
-                    .join(&archive_snapshot_name)
-                    .to_string_lossy()
-                    .to_string(),
-                &snapshot_name,
-                snapshot_capacity,
-            )
-            .await?;
-        }
-
-        // remove the tmp folder
-        fs_extra::remove_items(&[snapshot_path])?;
 
         Ok(())
     }
