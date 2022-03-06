@@ -64,6 +64,8 @@ impl TezedgeNodeController {
         snapshots_target_directory: PathBuf,
         log: Logger,
     ) -> Self {
+        let node_container_name = format!("{}-{}", node_container_name, network);
+        let monitoring_container_name = format!("{}-{}", monitoring_container_name, network);
         Self {
             url,
             node_container_name,
@@ -213,7 +215,7 @@ impl TezedgeNodeController {
             fs_extra::remove_items(&to_remove)?;
         }
 
-        let image = "tezedge/tezedge:latest";
+        let image = "tezedge/tezedge:no-snapshot-timeout";
         let cont_name = format!("tezedge-snapshots-full-{}", self.network);
         let snapshot_name = format!("{}_full", snapshot_name);
         let snapshot_name_temp = format!("{}.temp", &snapshot_name);
