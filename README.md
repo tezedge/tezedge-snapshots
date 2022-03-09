@@ -8,13 +8,13 @@ Installed docker and docker-compose.
 
 ## Snapshots
 
-tezedge_\<network_name\>_\<date\>-\<time\>_\<block_hash\>
+tezedge_\<network_name\>_\<date\>-\<time\>_\<block_hash\>_\<snapshot_typ\>
 
 ### Example
 
-`tezedge_granadanet_20211108-104156_BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe`
+`tezedge_granadanet_20211108-104156_BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe_archive`
 
-The snapshot above comes from `granadanet` and was taken on the `8th of November 2021` at `10:41:56 UTC` and at block `BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe`.
+The snapshot above comes from `granadanet` and was taken on the `8th of November 2021` at `10:41:56 UTC` and at block `BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe`. The snapshot type is `archive`.
 
 ## Running
 
@@ -57,6 +57,8 @@ NODE_HOSTNAME_OR_IP=116.202.128.230 TEZOS_NETWORK=granadanet TEZEDGE_VOLUME_PATH
 - `node-container-name`: The name of the container the tezedge node resides in
 - `monitoring-container-name`: The name of the container the tezedge monitoring resides in
 - `log-level`: Set logging level
+- `snapshot-type`: The type of the snapshot to take. One of the following values: archive, full, all (take all snapshot types)
+- `full-snapshot-image`: The tezedge image used to create the full snapshot. Defaults to: "tezedge/tezedge:latest"
 
 ## Nginx fancy index configuration
 
