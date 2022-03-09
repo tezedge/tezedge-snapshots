@@ -11,7 +11,7 @@ services:
       "--network", "${TEZOS_NETWORK-hangzhou}",
       "--p2p-port=9999",
       "--rpc-port=19999",
-      "--websocket-address=0.0.0.0:4927",
+      "--websocket-address=0.0.0.0:4999",
       "--log", "terminal", "file",
       "--log-file", "/tmp/tezedge/tezedge.log",
       "--tezos-context-storage", "irmin",
@@ -54,7 +54,7 @@ services:
     image: tezedge/tezedge-explorer:v1.9.0
     environment:
       # need a better way to provide such information
-      - API=[{"id":"rust","type":"tezedge","name":"rust.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:19999","p2p_port":9999,"features":[{"name":"ws","url":"ws://${NODE_HOSTNAME_OR_IP}:4927"},{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:38732/resources/tezedge"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]},{"id":"ocaml","type":"octez","name":"ocaml.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:18733","p2p_port":9733,"features":[{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:38732/resources/ocaml"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]}]
+      - API=[{"id":"rust","type":"tezedge","name":"rust.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:19999","p2p_port":9999,"features":[{"name":"ws","url":"ws://${NODE_HOSTNAME_OR_IP}:4999"},{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39999/resources/tezedge"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]},{"id":"ocaml","type":"octez","name":"ocaml.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:18733","p2p_port":9733,"features":[{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39999/resources/ocaml"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]}]
     ports:
       - "8889:80"
 
@@ -67,7 +67,7 @@ services:
     command: [
       "--tezedge-nodes", "tezedge:19999:/tmp/tezedge",
       "--wait-for-nodes",
-      "--rpc-port", "38732",
+      "--rpc-port", "39999",
     ]
     volumes:
       - "${TEZEDGE_VOLUME_PATH}:/tmp/tezedge"
