@@ -2,16 +2,16 @@ version: "3"
 
 services:
   tezedge-node:
-    image: tezedge/tezedge:v1.16.0
+    image: tezedge/tezedge:v1.16.1
     pid: host
     network_mode: host
-    container_name: tezedge-node
+    container_name: tezedge-node-${TEZOS_NETWORK-hangzhou}
     stop_signal: SIGINT
     command: [
       "--network", "${TEZOS_NETWORK-hangzhou}",
       "--p2p-port=9999",
       "--rpc-port=19999",
-      "--websocket-address=0.0.0.0:4927",
+      "--websocket-address=0.0.0.0:4999",
       "--log", "terminal", "file",
       "--log-file", "/tmp/tezedge/tezedge.log",
       "--tezos-context-storage", "irmin",
@@ -32,7 +32,7 @@ services:
   tezedge-snapshots:
     image: tezedge/tezedge-snapshots
     network_mode: host
-    container_name: tezedge-snapshots
+    container_name: tezedge-snapshots-${TEZOS_NETWORK-hangzhou}
     stop_signal: SIGINT
     environment:
       - TEZEDGE_SNAPSHOTS_VOLUME_PATH=${TEZEDGE_SNAPSHOTS_VOLUME_PATH}
@@ -41,6 +41,7 @@ services:
       "--tezedge-node-url", "http://localhost:19999",
       "--snapshot-frequency", "300",
       "--network", "${TEZOS_NETWORK-hangzhou}",
+      "--full-snapshot-image", "tezedge/tezedge:v1.16.1"
     ]
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -54,20 +55,20 @@ services:
     image: tezedge/tezedge-explorer:v1.9.0
     environment:
       # need a better way to provide such information
-      - API=[{"id":"rust","type":"tezedge","name":"rust.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:19999","p2p_port":9999,"features":[{"name":"ws","url":"ws://${NODE_HOSTNAME_OR_IP}:4927"},{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:38732/resources/tezedge"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]},{"id":"ocaml","type":"octez","name":"ocaml.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:18733","p2p_port":9733,"features":[{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:38732/resources/ocaml"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]}]
+      - API=[{"id":"rust","type":"tezedge","name":"rust.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:19999","p2p_port":9999,"features":[{"name":"ws","url":"ws://${NODE_HOSTNAME_OR_IP}:4999"},{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39999/resources/tezedge"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]},{"id":"ocaml","type":"octez","name":"ocaml.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:18733","p2p_port":9733,"features":[{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39999/resources/ocaml"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]}]
     ports:
-      - "8080:80"
+      - "8889:80"
 
   monitoring:
     privileged: true
-    container_name: tezedge-node-monitoring
+    container_name: tezedge-node-monitoring-${TEZOS_NETWORK-hangzhou}
     network_mode: host
     image: tezedge/node-monitoring:v1.9.1
     pid: "host"
     command: [
       "--tezedge-nodes", "tezedge:19999:/tmp/tezedge",
       "--wait-for-nodes",
-      "--rpc-port", "38732",
+      "--rpc-port", "39999",
     ]
     volumes:
       - "${TEZEDGE_VOLUME_PATH}:/tmp/tezedge"

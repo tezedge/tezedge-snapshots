@@ -35,6 +35,7 @@ pub struct TezedgeNodeController {
     database_directory: PathBuf,
     last_snapshot_timestamp: Option<Instant>,
     snapshots_target_directory: PathBuf,
+    full_snapshot_image: String,
     log: Logger,
 }
 
@@ -54,6 +55,7 @@ pub enum TezedgeNodeControllerError {
     IoError(#[from] std::io::Error),
 }
 
+#[allow(clippy::too_many_arguments)]
 impl TezedgeNodeController {
     pub fn new(
         url: Url,
@@ -62,8 +64,11 @@ impl TezedgeNodeController {
         network: String,
         database_directory: PathBuf,
         snapshots_target_directory: PathBuf,
+        full_snapshot_image: String,
         log: Logger,
     ) -> Self {
+        let node_container_name = format!("{}-{}", node_container_name, network);
+        let monitoring_container_name = format!("{}-{}", monitoring_container_name, network);
         Self {
             url,
             node_container_name,
@@ -72,6 +77,7 @@ impl TezedgeNodeController {
             database_directory,
             snapshots_target_directory,
             last_snapshot_timestamp: None,
+            full_snapshot_image,
             log,
         }
     }
@@ -213,7 +219,7 @@ impl TezedgeNodeController {
             fs_extra::remove_items(&to_remove)?;
         }
 
-        let image = "tezedge/tezedge:latest";
+        // let image = "tezedge/tezedge:no-snapshot-timeout";
         let cont_name = format!("tezedge-snapshots-full-{}", self.network);
         let snapshot_name = format!("{}_full", snapshot_name);
         let snapshot_name_temp = format!("{}.temp", &snapshot_name);
@@ -288,7 +294,7 @@ impl TezedgeNodeController {
         };
 
         let config = Config {
-            image: Some(image),
+            image: Some(self.full_snapshot_image.as_str()),
             host_config: Some(host_config),
             entrypoint: Some(entrypoint),
             ..Default::default()

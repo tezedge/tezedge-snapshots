@@ -44,6 +44,10 @@ pub struct TezedgeSnapshotEnvironment {
 
     // what snapshots to create
     pub snapshot_type: SnapshotType,
+
+    /// use this image to create the full snapshotting container
+    pub full_snapshot_image: String,
+
     // TODO: add options for snapshot frequency in blocks
     // TODO: add options for snapshot frequency: daily, weekly, ... Note: in combination of timestamp?
     // TODO: add options for concrete levels to snapshot on
@@ -162,6 +166,13 @@ fn tezedge_snapshots_app() -> App<'static, 'static> {
                 .help("Type of the snapshots"),
         )
         .arg(
+            Arg::with_name("full-snapshot-image")
+                .long("full-snapshot-image")
+                .takes_value(true)
+                .value_name("STRING")
+                .help("The name of the tezedge image to use for the full snapshots"),
+        )
+        .arg(
             Arg::with_name("log-level")
                 .long("log-level")
                 .takes_value(true)
@@ -230,6 +241,10 @@ impl TezedgeSnapshotEnvironment {
                 .unwrap_or("all")
                 .parse::<SnapshotType>()
                 .expect("Expected values archive, full or all"),
+            full_snapshot_image: args
+                .value_of("full-snapshot-image")
+                .unwrap_or("tezedge/tezedge:latest")
+                .to_string(),
         }
     }
 }

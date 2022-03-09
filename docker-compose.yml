@@ -2,10 +2,10 @@ version: "3"
 
 services:
   tezedge-node:
-    image: tezedge/tezedge:v1.16.0
+    image: tezedge/tezedge:v1.16.1
     pid: host
     network_mode: host
-    container_name: tezedge-node
+    container_name: tezedge-node-${TEZOS_NETWORK-mainnet}
     stop_signal: SIGINT
     command: [
       "--network", "${TEZOS_NETWORK-mainnet}",
@@ -32,7 +32,7 @@ services:
   tezedge-snapshots:
     image: tezedge/tezedge-snapshots
     network_mode: host
-    container_name: tezedge-snapshots
+    container_name: tezedge-snapshots-${TEZOS_NETWORK-mainnet}
     stop_signal: SIGINT
     environment:
       - TEZEDGE_SNAPSHOTS_VOLUME_PATH=${TEZEDGE_SNAPSHOTS_VOLUME_PATH}
@@ -40,7 +40,8 @@ services:
     command: [
       "--tezedge-node-url", "http://localhost:18732",
       "--snapshot-frequency", "300",
-      "--network", "${TEZOS_NETWORK-mainnet}"
+      "--network", "${TEZOS_NETWORK-mainnet}",
+      "--full-snapshot-image", "tezedge/tezedge:v1.16.1"
     ]
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -60,7 +61,7 @@ services:
 
   monitoring:
     privileged: true
-    container_name: tezedge-node-monitoring
+    container_name: tezedge-node-monitoring-${TEZOS_NETWORK-mainnet}
     network_mode: host
     image: tezedge/node-monitoring:v1.9.1
     pid: "host"
