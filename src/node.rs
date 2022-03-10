@@ -16,7 +16,7 @@ use std::{
     collections::HashMap,
     env, fs,
     path::{Path, PathBuf},
-    vec, io::BufReader,
+    vec,
 };
 use thiserror::Error;
 use tokio::time::{Duration, Instant};
@@ -147,21 +147,22 @@ impl TezedgeNodeController {
             dir::create_all(&archive_snapshots_target_directory, false)?;
         }
 
-        info!(self.log, "[Archive] Checking for rolling older snapshots (1/5)");
+        info!(self.log, "[Archive] Checking for rolling older snapshots (1/4)");
 
         // identify and remove the oldest snapshot in the target dir, if we are over capacity
         self.check_rolling(&archive_snapshots_target_directory, snapshot_capacity)?;
 
         // 2. copy out the database directories to a temp folder
-        info!(self.log, "[Archive] Extracting node databases (2/5)");
+        info!(self.log, "[Archive] Removing lock file (2/4)");
 
         let to_remove = vec![self.database_directory.join("context/index/lock")];
         fs_extra::remove_items(&to_remove)?;
 
+        info!(self.log, "[Archive] Creating tarball (3/4)");
         self.create_tezedge_tar_archive(&snapshot_name_temp, &self.database_directory, &archive_snapshots_target_directory)?;
 
         // . move to the destination
-        info!(self.log, "[Archive] Removing .temp from the snapshot directory (5/5)");
+        info!(self.log, "[Archive] Removing .temp from the snapshot directory (4/4)");
         // rename to the final name removing .temp indicating that the copy has been complete
         fs::rename(
             archive_snapshots_target_directory.join(&snapshot_name_temp),
@@ -196,7 +197,7 @@ impl TezedgeNodeController {
         }
 
         // check for rolling
-        info!(self.log, "[Full] Checking for rolling older snapshots (1/6)");
+        info!(self.log, "[Full] Checking for rolling older snapshots (1/7)");
         self.check_rolling(&full_snapshots_target_directory, snapshot_capacity)?;
 
         let snapshot_path = full_snapshots_target_directory.join(&snapshot_name_dir_temp);
@@ -223,7 +224,7 @@ impl TezedgeNodeController {
             &snapshot_path_string,
         ];
 
-        info!(self.log, "[Full] Creating full snapshotting tezedge container (2/6)");
+        info!(self.log, "[Full] Creating full snapshotting tezedge container (2/7)");
         let snapshot_host_path = env::var("TEZEDGE_SNAPSHOTS_VOLUME_PATH").unwrap_or_else(|_| {
             self.snapshots_target_directory
                 .to_string_lossy()
@@ -272,24 +273,25 @@ impl TezedgeNodeController {
             .create_container::<String, &str>(Some(opts), config)
             .await?;
 
-        info!(self.log, "[Full] Starting full snapshotting tezedge container (3/6)");
+        info!(self.log, "[Full] Starting full snapshotting tezedge container (3/7)");
         docker.start_container::<String>(&cont_name, None).await?;
 
         while let Ok(true) = Self::is_running(&cont_name).await {
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
-        info!(self.log, "[Full] Full Snapshotting tezedge container finished (4/6)");
+        info!(self.log, "[Full] Full Snapshotting tezedge container finished (4/7)");
 
+        info!(self.log, "[Full] Creating tarball (5/7)");
         self.create_tezedge_tar_archive(&snapshot_name_temp, &snapshot_path, &full_snapshots_target_directory)?;
 
         // rename to the final name removing .temp indicating that the copy has been complete
-        info!(self.log, "[Full] Removing .temp from the snapshot directory (5/6)");
+        info!(self.log, "[Full] Removing .temp from the snapshot directory (6/7)");
         fs::rename(
             full_snapshots_target_directory.join(&snapshot_name_temp),
             full_snapshots_target_directory.join(&snapshot_name),
         )?;
 
-        info!(self.log, "[Full] Removing Full Snapshotting tezedge container (6/6)");
+        info!(self.log, "[Full] Removing Full Snapshotting tezedge container (7/7)");
         docker.remove_container(&cont_name, None).await?;
         fs_extra::remove_items(&[snapshot_path])?;
 
