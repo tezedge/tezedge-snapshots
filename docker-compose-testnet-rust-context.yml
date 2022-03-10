@@ -5,7 +5,7 @@ services:
     image: tezedge/tezedge:v1.16.1
     pid: host
     network_mode: host
-    container_name: tezedge-node-${TEZOS_NETWORK-hangzhou}
+    container_name: tezedge-node-${CONTEXT_TYPE}-${TEZOS_NETWORK-hangzhou}
     stop_signal: SIGINT
     command: [
       "--network", "${TEZOS_NETWORK-hangzhou}",
@@ -32,7 +32,7 @@ services:
   tezedge-snapshots:
     image: tezedge/tezedge-snapshots
     network_mode: host
-    container_name: tezedge-snapshots-${TEZOS_NETWORK-hangzhou}
+    container_name: tezedge-snapshots-${CONTEXT_TYPE}-${TEZOS_NETWORK-hangzhou}
     stop_signal: SIGINT
     environment:
       - TEZEDGE_SNAPSHOTS_VOLUME_PATH=${TEZEDGE_SNAPSHOTS_VOLUME_PATH}
@@ -62,7 +62,7 @@ services:
 
   monitoring:
     privileged: true
-    container_name: tezedge-node-monitoring-${TEZOS_NETWORK-hangzhou}
+    container_name: tezedge-node-monitoring-${CONTEXT_TYPE}-${TEZOS_NETWORK-hangzhou}
     network_mode: host
     image: tezedge/node-monitoring:v1.9.1
     pid: "host"

@@ -5,7 +5,7 @@ services:
     image: tezedge/tezedge:v1.16.1
     pid: host
     network_mode: host
-    container_name: tezedge-node-${TEZOS_NETWORK-mainnet}
+    container_name: tezedge-node-${CONTEXT_TYPE}-${TEZOS_NETWORK-mainnet}
     stop_signal: SIGINT
     command: [
       "--network", "${TEZOS_NETWORK-mainnet}",

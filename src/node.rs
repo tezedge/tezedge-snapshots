@@ -70,8 +70,8 @@ impl TezedgeNodeController {
         context_type: ContextType,
         log: Logger,
     ) -> Self {
-        let node_container_name = format!("{}-{}", node_container_name, network);
-        let monitoring_container_name = format!("{}-{}", monitoring_container_name, network);
+        let node_container_name = format!("{}-{}-{}", node_container_name, context_type.to_string(), network);
+        let monitoring_container_name = format!("{}-{}-{}", monitoring_container_name, context_type.to_string(), network);
         Self {
             url,
             node_container_name,
