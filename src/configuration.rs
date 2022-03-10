@@ -65,7 +65,7 @@ pub enum SnapshotType {
 #[derive(Clone, Debug)]
 pub enum ContextType {
     Irmin,
-    Rust,
+    Tezedge,
 }
 
 #[derive(Clone, Debug)]
@@ -90,7 +90,7 @@ impl FromStr for ContextType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "irmin" => Ok(ContextType::Irmin),
-            "rust" => Ok(ContextType::Rust),
+            "tezedge" => Ok(ContextType::Tezedge),
             _ => Err(TypeNotFound {}),
         }
     }
@@ -100,7 +100,7 @@ impl ToString for ContextType {
     fn to_string(&self) -> String {
         match self {
             ContextType::Irmin => String::from("irmin"),
-            ContextType::Rust => String::from("rust"),
+            ContextType::Tezedge => String::from("tezedge"),
         }
     }
 }
