@@ -21,3 +21,5 @@ tokio = { version = "1.12", features = ["full"] }
 fs_extra = "1.2"
 chrono = "0.4"
 filetime = "0.2"
+flate2 = "1.0"
+tar = "0.4"

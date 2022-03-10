@@ -48,6 +48,8 @@ pub struct TezedgeSnapshotEnvironment {
     /// use this image to create the full snapshotting container
     pub full_snapshot_image: String,
 
+    pub context_type: ContextType,
+
     // TODO: add options for snapshot frequency in blocks
     // TODO: add options for snapshot frequency: daily, weekly, ... Note: in combination of timestamp?
     // TODO: add options for concrete levels to snapshot on
@@ -61,17 +63,44 @@ pub enum SnapshotType {
 }
 
 #[derive(Clone, Debug)]
-pub struct SnapshotTypeNotFound {}
+pub enum ContextType {
+    Irmin,
+    Rust,
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeNotFound {}
 
 impl FromStr for SnapshotType {
-    type Err = SnapshotTypeNotFound;
+    type Err = TypeNotFound;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "archive" => Ok(SnapshotType::Archive),
             "full" => Ok(SnapshotType::Full),
             "all" => Ok(SnapshotType::All),
-            _ => Err(SnapshotTypeNotFound {}),
+            _ => Err(TypeNotFound {}),
+        }
+    }
+}
+
+impl FromStr for ContextType {
+    type Err = TypeNotFound;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "irmin" => Ok(ContextType::Irmin),
+            "rust" => Ok(ContextType::Rust),
+            _ => Err(TypeNotFound {}),
+        }
+    }
+}
+
+impl ToString for ContextType {
+    fn to_string(&self) -> String {
+        match self {
+            ContextType::Irmin => String::from("irmin"),
+            ContextType::Rust => String::from("rust"),
         }
     }
 }
@@ -166,6 +195,13 @@ fn tezedge_snapshots_app() -> App<'static, 'static> {
                 .help("Type of the snapshots"),
         )
         .arg(
+            Arg::with_name("context-type")
+                .long("context-type")
+                .takes_value(true)
+                .value_name("ContextType")
+                .help("Type of the context"),
+        )
+        .arg(
             Arg::with_name("full-snapshot-image")
                 .long("full-snapshot-image")
                 .takes_value(true)
@@ -245,6 +281,11 @@ impl TezedgeSnapshotEnvironment {
                 .value_of("full-snapshot-image")
                 .unwrap_or("tezedge/tezedge:latest")
                 .to_string(),
+            context_type: args
+                .value_of("context-type")
+                .unwrap_or("irmin")
+                .parse::<ContextType>()
+                .expect("Expected values archive, full or all"),
         }
     }
 }
