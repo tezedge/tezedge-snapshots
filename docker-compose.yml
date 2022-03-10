@@ -14,7 +14,7 @@ services:
       "--websocket-address=0.0.0.0:4927",
       "--log", "terminal", "file",
       "--log-file", "/tmp/tezedge/tezedge.log",
-      "--tezos-context-storage", "irmin",
+      "--tezos-context-storage", "${CONTEXT_TYPE}",
       "--peer-thresh-low", "60",
       "--peer-thresh-high", "80"
     ]
@@ -41,7 +41,8 @@ services:
       "--tezedge-node-url", "http://localhost:18732",
       "--snapshot-frequency", "300",
       "--network", "${TEZOS_NETWORK-mainnet}",
-      "--full-snapshot-image", "tezedge/tezedge:v1.16.1"
+      "--full-snapshot-image", "tezedge/tezedge:v1.16.1",
+      "--context-type", "${CONTEXT_TYPE}"
     ]
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
