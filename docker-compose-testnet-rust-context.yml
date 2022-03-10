@@ -43,6 +43,8 @@ services:
       "--network", "${TEZOS_NETWORK-hangzhou}",
       "--full-snapshot-image", "tezedge/tezedge:v1.16.1",
       "--context-type", "${CONTEXT_TYPE}",
+      "--snapshot-frequency", "43200", # 2 times per day 43200s -> 12h
+      "--snapshot-capacity", "2"
     ]
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
@@ -58,7 +60,7 @@ services:
       # need a better way to provide such information
       - API=[{"id":"rust","type":"tezedge","name":"rust.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:19997","p2p_port":9997,"features":[{"name":"ws","url":"ws://${NODE_HOSTNAME_OR_IP}:4997"},{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39997/resources/tezedge"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]},{"id":"ocaml","type":"octez","name":"ocaml.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:18733","p2p_port":9733,"features":[{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39997/resources/ocaml"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]}]
     ports:
-      - "8889:80"
+      - "8887:80"
 
   monitoring:
     privileged: true
