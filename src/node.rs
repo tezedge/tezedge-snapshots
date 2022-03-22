@@ -8,7 +8,7 @@ use bollard::{
 };
 use chrono::Utc;
 use filetime::FileTime;
-use flate2::{read::GzEncoder, Compression};
+use flate2::{write::GzEncoder, Compression};
 use fs_extra::dir;
 use serde::Deserialize;
 use slog::{info, Logger, crit};
@@ -328,10 +328,10 @@ impl TezedgeNodeController {
     fn check_rolling(&self, snapshot_dir: &Path, snapshot_capacity: usize) -> Result<(), TezedgeNodeControllerError> {
         // identify and remove the oldest snapshot in the target dir, if we are over capacity
         let current_snapshots = dir::get_dir_content(&snapshot_dir)?
-            .directories
+            .files
             .iter()
-            .map(|dir| snapshot_dir.join(dir))
-            // we need the only the direct directories contained in the main directory, filter out all deeper sub directories
+            .map(|file| snapshot_dir.join(file))
+            // we need the only the direct files contained in the main directory, filter out all deeper sub directories
             .filter(|p| {
                 p.components().count() == snapshot_dir.components().count() + 1
             })
@@ -427,9 +427,9 @@ impl TezedgeNodeController {
         let enc = GzEncoder::new(tar_gz, Compression::fast());
         let mut tar = tar::Builder::new(enc);
         crit!(self.log, "Adding to archive: {}", source.join("context").to_string_lossy());
-        tar.append_dir_all(archive_name, source.join("context"))?;
+        tar.append_dir_all("context", source.join("context"))?;
         crit!(self.log, "Adding to archive: {}", source.join("bootstrap_db").to_string_lossy());
-        tar.append_dir_all(archive_name, source.join("bootstrap_db"))?;
+        tar.append_dir_all("bootstrap_db", source.join("bootstrap_db"))?;
         tar.finish()?;
         Ok(())
     }
