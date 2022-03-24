@@ -206,6 +206,7 @@ impl TezedgeNodeController {
         }
         let snapshot_path_string = snapshot_path.to_string_lossy().to_string();
         let database_path_string = self.database_directory.to_string_lossy().to_string();
+        let with_context_type = self.context_type.to_string();
 
         let entrypoint = vec![
             "/light-node",
@@ -219,6 +220,8 @@ impl TezedgeNodeController {
             "--bootstrap-db-path=bootstrap_db",
             "--tezos-data-dir",
             &database_path_string,
+            "--tezos-context-storage",
+            &with_context_type,
             "snapshot",
             "--target-path",
             &snapshot_path_string,
