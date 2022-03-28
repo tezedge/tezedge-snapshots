@@ -5,16 +5,16 @@ services:
     image: tezedge/tezedge:v1.19.0
     pid: host
     network_mode: host
-    container_name: tezedge-node-${CONTEXT_TYPE-irmin}-${TEZOS_NETWORK-mainnet}
+    container_name: tezedge-node-${CONTEXT_TYPE-tezedge}-${TEZOS_NETWORK-mainnet}
     stop_signal: SIGINT
     command: [
       "--network", "${TEZOS_NETWORK-mainnet}",
-      "--p2p-port=9732",
-      "--rpc-port=18732",
-      "--websocket-address=0.0.0.0:4927",
+      "--p2p-port=9998",
+      "--rpc-port=19998",
+      "--websocket-address=0.0.0.0:4998",
       "--log", "terminal", "file",
       "--log-file", "/tmp/tezedge/tezedge.log",
-      "--tezos-context-storage", "${CONTEXT_TYPE-irmin}",
+      "--tezos-context-storage", "${CONTEXT_TYPE-tezedge}",
       "--peer-thresh-low", "60",
       "--peer-thresh-high", "80"
     ]
@@ -32,17 +32,17 @@ services:
   tezedge-snapshots:
     image: tezedge/tezedge-snapshots
     network_mode: host
-    container_name: tezedge-snapshots-${CONTEXT_TYPE-irmin}-${TEZOS_NETWORK-mainnet}
+    container_name: tezedge-snapshots-${CONTEXT_TYPE-tezedge}-${TEZOS_NETWORK-mainnet}
     stop_signal: SIGINT
     environment:
       - TEZEDGE_SNAPSHOTS_VOLUME_PATH=${TEZEDGE_SNAPSHOTS_VOLUME_PATH}
       - TEZEDGE_VOLUME_PATH=${TEZEDGE_VOLUME_PATH}
     command: [
-      "--tezedge-node-url", "http://localhost:18732",
+      "--tezedge-node-url", "http://localhost:19998",
       "--snapshot-frequency", "300",
       "--network", "${TEZOS_NETWORK-mainnet}",
       "--full-snapshot-image", "tezedge/tezedge:v1.19.0",
-      "--context-type", "${CONTEXT_TYPE-irmin}",
+      "--context-type", "${CONTEXT_TYPE-tezedge}",
       "--snapshot-frequency", "43200", # 2 times per day 43200s -> 12h
       "--snapshot-capacity", "2"
     ]
@@ -58,20 +58,20 @@ services:
     image: tezedge/tezedge-explorer:v1.9.0
     environment:
       # need a better way to provide such information
-      - API=[{"id":"rust","type":"tezedge","name":"rust.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:18732","p2p_port":9732,"features":[{"name":"ws","url":"ws://${NODE_HOSTNAME_OR_IP}:4927"},{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:38732/resources/tezedge"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]},{"id":"ocaml","type":"octez","name":"ocaml.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:18733","p2p_port":9733,"features":[{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:38732/resources/ocaml"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]}]
+      - API=[{"id":"rust","type":"tezedge","name":"rust.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:19998","p2p_port":9998,"features":[{"name":"ws","url":"ws://${NODE_HOSTNAME_OR_IP}:4998"},{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39998/resources/tezedge"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]},{"id":"ocaml","type":"octez","name":"ocaml.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:18733","p2p_port":9733,"features":[{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39998/resources/ocaml"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]}]
     ports:
-      - "8888:80"
+      - "8890:80"
 
   monitoring:
     privileged: true
-    container_name: tezedge-node-monitoring-${CONTEXT_TYPE-irmin}-${TEZOS_NETWORK-mainnet}
+    container_name: tezedge-node-monitoring-${CONTEXT_TYPE-tezedge}-${TEZOS_NETWORK-mainnet}
     network_mode: host
     image: tezedge/node-monitoring:v1.9.1
     pid: "host"
     command: [
-      "--tezedge-nodes", "tezedge:18732:/tmp/tezedge",
+      "--tezedge-nodes", "tezedge:19998:/tmp/tezedge",
       "--wait-for-nodes",
-      "--rpc-port", "38732",
+      "--rpc-port", "39998",
     ]
     volumes:
       - "${TEZEDGE_VOLUME_PATH}:/tmp/tezedge"

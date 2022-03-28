@@ -30,6 +30,7 @@ async fn main() {
         network,
         snapshot_type,
         full_snapshot_image,
+        context_type,
     } = env;
 
     // create an slog logger
@@ -43,6 +44,7 @@ async fn main() {
         tezedge_database_directory,
         snapshots_target_directory,
         full_snapshot_image,
+        context_type,
         log.clone(),
     );
 
