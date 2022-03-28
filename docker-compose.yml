@@ -5,7 +5,7 @@ services:
     image: tezedge/tezedge:v1.19.0
     pid: host
     network_mode: host
-    container_name: tezedge-node-${CONTEXT_TYPE}-${TEZOS_NETWORK-mainnet}
+    container_name: tezedge-node-${CONTEXT_TYPE-irmin}-${TEZOS_NETWORK-mainnet}
     stop_signal: SIGINT
     command: [
       "--network", "${TEZOS_NETWORK-mainnet}",
@@ -14,7 +14,7 @@ services:
       "--websocket-address=0.0.0.0:4927",
       "--log", "terminal", "file",
       "--log-file", "/tmp/tezedge/tezedge.log",
-      "--tezos-context-storage", "${CONTEXT_TYPE}",
+      "--tezos-context-storage", "${CONTEXT_TYPE-irmin}",
       "--peer-thresh-low", "60",
       "--peer-thresh-high", "80"
     ]
@@ -32,7 +32,7 @@ services:
   tezedge-snapshots:
     image: tezedge/tezedge-snapshots
     network_mode: host
-    container_name: tezedge-snapshots-${CONTEXT_TYPE}-${TEZOS_NETWORK-mainnet}
+    container_name: tezedge-snapshots-${CONTEXT_TYPE-irmin}-${TEZOS_NETWORK-mainnet}
     stop_signal: SIGINT
     environment:
       - TEZEDGE_SNAPSHOTS_VOLUME_PATH=${TEZEDGE_SNAPSHOTS_VOLUME_PATH}
@@ -42,7 +42,7 @@ services:
       "--snapshot-frequency", "300",
       "--network", "${TEZOS_NETWORK-mainnet}",
       "--full-snapshot-image", "tezedge/tezedge:v1.19.0",
-      "--context-type", "${CONTEXT_TYPE}",
+      "--context-type", "${CONTEXT_TYPE-irmin}",
       "--snapshot-frequency", "43200", # 2 times per day 43200s -> 12h
       "--snapshot-capacity", "2"
     ]
@@ -64,7 +64,7 @@ services:
 
   monitoring:
     privileged: true
-    container_name: tezedge-node-monitoring-${CONTEXT_TYPE}-${TEZOS_NETWORK-mainnet}
+    container_name: tezedge-node-monitoring-${CONTEXT_TYPE-irmin}-${TEZOS_NETWORK-mainnet}
     network_mode: host
     image: tezedge/node-monitoring:v1.9.1
     pid: "host"
