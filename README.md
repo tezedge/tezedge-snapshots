@@ -8,13 +8,13 @@ Installed docker and docker-compose.
 
 ## Snapshots
 
-tezedge_\<network_name\>_\<date\>-\<time\>_\<block_hash\>_\<snapshot_typ\>
+tezedge_\<network_name\>_\<date\>-\<time\>_\<block_hash\>_\<context_type\>.\<snapshot_type\>
 
 ### Example
 
-`tezedge_granadanet_20211108-104156_BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe_archive`
+`tezedge_granadanet_20211108-104156_BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe_irmin.archive`
 
-The snapshot above comes from `granadanet` and was taken on the `8th of November 2021` at `10:41:56 UTC` and at block `BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe`. The snapshot type is `archive`.
+The snapshot above comes from `granadanet` and was taken on the `8th of November 2021` at `10:41:56 UTC` and at block `BLo9BSrp7S8HnrX43vK3LdHpHUAoTVSqFACtzczjfP7a2CExUZe`. The snapshot was taken on a node running with the `irmin` context and the snapshot type is `archive`.
 
 ## Running
 
@@ -60,28 +60,25 @@ NODE_HOSTNAME_OR_IP=116.202.128.230 TEZOS_NETWORK=granadanet TEZEDGE_VOLUME_PATH
 - `snapshot-type`: The type of the snapshot to take. One of the following values: archive, full, all (take all snapshot types)
 - `full-snapshot-image`: The tezedge image used to create the full snapshot. Defaults to: "tezedge/tezedge:latest"
 
-## Nginx fancy index configuration
+## Nginx file server configuration
 
 ```
-location /Nginx-Fancyindex-Theme {
-        root /path/to/Nginx-Fancyindex-Theme;
-}
+server {
+        listen 80 default_server;
+        listen [::]:80 default_server;
+        add_header Access-Control-Allow-Origin *;
 
-location / {
-        root /path/to/snapshots;
-        # fancyindex specific settings
-        fancyindex on;
-        fancyindex_localtime on;
-        fancyindex_exact_size off;
-        fancyindex_header "/Nginx-Fancyindex-Theme-dark/header.html";
-        fancyindex_footer "/Nginx-Fancyindex-Theme-dark/footer.html";
-        fancyindex_ignore "examplefile.html"; # Ignored files will not show up in the directory listing, but will still be public.
-        fancyindex_ignore "Nginx-Fancyindex-Theme-dark"; # Making sure folder where files are don't show up in the listing.
-        fancyindex_ignore "^.*.\.temp"; # Ignore the directory while it has .temp at the end of it's name indication copy in progress.
-        fancyindex_ignore "^\..*";
-        # Warning: if you use an old version of ngx-fancyindex, comment the last line if you
-        # encounter a bug. See https://github.com/Naereen/Nginx-Fancyindex-Theme/issues/10
-        fancyindex_name_length 255; # Maximum file name length in bytes, change as you like.
-        fancyindex_default_sort date_desc;
+        root /var/www/html;
+
+        # Add index.php to the list if you are using PHP
+        index index.html index.htm index.nginx-debian.html;
+
+        server_name _;
+
+        location / {
+                root /snapshots/;
+                autoindex on;
+                autoindex_format json;
+        }
 }
 ```
