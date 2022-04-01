@@ -2,7 +2,7 @@ version: "3"
 
 services:
   tezedge-node:
-    image: tezedge/tezedge:v1.19.0
+    image: tezedge/tezedge:v2.0.0
     pid: host
     network_mode: host
     container_name: tezedge-node-${CONTEXT_TYPE-irmin}-${TEZOS_NETWORK-mainnet}
@@ -41,7 +41,7 @@ services:
       "--tezedge-node-url", "http://localhost:18732",
       "--snapshot-frequency", "300",
       "--network", "${TEZOS_NETWORK-mainnet}",
-      "--full-snapshot-image", "tezedge/tezedge:v1.19.0",
+      "--full-snapshot-image", "tezedge/tezedge:v2.0.0",
       "--context-type", "${CONTEXT_TYPE-irmin}",
       "--snapshot-frequency", "43200", # 2 times per day 43200s -> 12h
       "--snapshot-capacity", "2"
