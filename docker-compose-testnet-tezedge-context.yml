@@ -2,13 +2,13 @@ version: "3"
 
 services:
   tezedge-node:
-    image: tezedge/tezedge:v2.0.0
+    image: tezedge/tezedge:v3.1.0
     pid: host
     network_mode: host
-    container_name: tezedge-node-${CONTEXT_TYPE-tezedge}-${TEZOS_NETWORK-ithaca}
+    container_name: tezedge-node-${CONTEXT_TYPE-tezedge}-${TEZOS_NETWORK-jakarta}
     stop_signal: SIGINT
     command: [
-      "--network", "${TEZOS_NETWORK-ithaca}",
+      "--network", "${TEZOS_NETWORK-jakarta}",
       "--p2p-port=9997",
       "--rpc-port=19997",
       "--websocket-address=0.0.0.0:4997",
@@ -32,16 +32,15 @@ services:
   tezedge-snapshots:
     image: tezedge/tezedge-snapshots
     network_mode: host
-    container_name: tezedge-snapshots-${CONTEXT_TYPE-tezedge}-${TEZOS_NETWORK-ithaca}
+    container_name: tezedge-snapshots-${CONTEXT_TYPE-tezedge}-${TEZOS_NETWORK-jakarta}
     stop_signal: SIGINT
     environment:
       - TEZEDGE_SNAPSHOTS_VOLUME_PATH=${TEZEDGE_SNAPSHOTS_VOLUME_PATH}
       - TEZEDGE_VOLUME_PATH=${TEZEDGE_VOLUME_PATH}
     command: [
       "--tezedge-node-url", "http://localhost:19997",
-      "--snapshot-frequency", "300",
-      "--network", "${TEZOS_NETWORK-ithaca}",
-      "--full-snapshot-image", "tezedge/tezedge:v2.0.0",
+      "--network", "${TEZOS_NETWORK-jakarta}",
+      "--full-snapshot-image", "tezedge/tezedge:v3.1.0",
       "--context-type", "${CONTEXT_TYPE-tezedge}",
       "--snapshot-frequency", "43200", # 2 times per day 43200s -> 12h
       "--snapshot-capacity", "2"
@@ -55,7 +54,7 @@ services:
       - "tezedge-node"
 
   explorer:
-    image: tezedge/tezedge-explorer:v1.9.0
+    image: tezedge/tezedge-explorer:v2.3.0
     environment:
       # need a better way to provide such information
       - API=[{"id":"rust","type":"tezedge","name":"rust.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:19997","p2p_port":9997,"features":[{"name":"ws","url":"ws://${NODE_HOSTNAME_OR_IP}:4997"},{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39997/resources/tezedge"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]},{"id":"ocaml","type":"octez","name":"ocaml.${NODE_HOSTNAME_OR_IP}","http":"http://${NODE_HOSTNAME_OR_IP}:18733","p2p_port":9733,"features":[{"name":"monitoring"},{"name":"resources/system","monitoringUrl":"http://${NODE_HOSTNAME_OR_IP}:39997/resources/ocaml"},{"name":"resources/memory","memoryProfilerUrl":"http://${NODE_HOSTNAME_OR_IP}:17832"},{"name":"mempool"},{"name":"network"}]}]
@@ -64,9 +63,9 @@ services:
 
   monitoring:
     privileged: true
-    container_name: tezedge-node-monitoring-${CONTEXT_TYPE-tezedge}-${TEZOS_NETWORK-ithaca}
+    container_name: tezedge-node-monitoring-${CONTEXT_TYPE-tezedge}-${TEZOS_NETWORK-jakarta}
     network_mode: host
-    image: tezedge/node-monitoring:v1.9.1
+    image: tezedge/node-monitoring:v3.1.0
     pid: "host"
     command: [
       "--tezedge-nodes", "tezedge:19997:/tmp/tezedge",
